@@ -23,9 +23,17 @@ app.register_blueprint(financeiro_bp, url_prefix='/api/financeiro')
 
 # Configura o banco de dados
 # O caminho aponta para a pasta 'database' dentro de 'src'
-db_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
-os.makedirs(os.path.dirname(db_path), exist_ok=True) # Garante que a pasta 'database' exista
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith("postgres://"):
+    # Substitui o protocolo para compatibilidade com SQLAlchemy
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Se não encontrar a variável do Railway, usa o banco local
+    local_db_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
+    os.makedirs(os.path.dirname(local_db_path), exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{local_db_path}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializa o banco de dados com o app

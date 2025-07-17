@@ -1748,3 +1748,5 @@ Para suporte técnico ou dúvidas sobre implementação:
 
 **Desenvolvido com ❤️ pela equipe Manus AI**
 
+#   A s s i s t e n t e - F i n a n c e i r o  
+ 

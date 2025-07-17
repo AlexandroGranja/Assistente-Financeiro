@@ -13,4 +13,4 @@ COPY . .
 
 # Comando para iniciar o servidor de produção com Gunicorn
 # Ele usa a variável de ambiente $PORT que o Railway fornece automaticamente
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "src.main:app"]
+CMD gunicorn --bind 0.0.0.0:$PORT src.main:app

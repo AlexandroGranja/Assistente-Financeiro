@@ -83,18 +83,4 @@ def init_db():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
 
-    # Em src/main.py
-
-# ... (todo o seu código existente, incluindo a rota /init-db) ...
-
-# ROTA PARA VERIFICAR QUAL BANCO DE DADOS ESTÁ SENDO USADO
-@app.route('/debug-db')
-def debug_db():
-    # Pega a string de conexão que o Flask está usando
-    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
-    return f"A aplicação está configurada para usar este banco de dados: {db_uri}"
-
-
-# Executa o servidor
-if __name__ == '__main__':
-    # ... (resto do seu código) ...
+    

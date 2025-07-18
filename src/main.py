@@ -58,28 +58,7 @@ def create_app():
             else:
                 return "index.html not found", 404
 
-    # 7. ROTA DE DIAGNÓSTICO
-    @app.route('/init-db')
-    def init_db():
-        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
-        output = f"<h1>Diagnóstico do Banco de Dados</h1>"
-        output += f"<p>A aplicação está configurada para usar: <strong>{db_uri}</strong></p>"
-        try:
-            with app.app_context():
-                db.create_all()
-                output += "<p>Comando 'db.create_all()' executado.</p>"
-                inspector = inspect(db.engine)
-                tables = inspector.get_table_names()
-                output += f"<p>Tabelas encontradas: <strong>{tables}</strong></p>"
-                if 'gastos' in tables:
-                    output += "<h2>SUCESSO! A tabela 'gastos' foi encontrada.</h2>"
-                else:
-                    output += "<h2>FALHA: A tabela 'gastos' NÃO foi encontrada.</h2>"
-        except Exception as e:
-            output += f"<h2>ERRO:</h2><p>{str(e)}</p>"
-        return output
-
-    return app
+    
 
 # Este bloco só é usado quando você executa 'python src/main.py' no seu computador
 if __name__ == '__main__':

@@ -1,43 +1,214 @@
-import os
-from sqlalchemy import inspect
+Starting Container
 
-# Importa a 'app' e o 'db' do seu ficheiro principal
-from .main import app, db
+--- A iniciar o processo de deploy com Application Factory ---
 
-print("--- A executar o script de inicialização do banco de dados ---")
+A executar o script de inicialização do banco de dados...
 
-# Pega a URI do banco de dados diretamente do ambiente
-db_uri = os.environ.get('DATABASE_URL')
+Traceback (most recent call last):
 
-if not db_uri:
-    print("ERRO FATAL: DATABASE_URL não encontrada. A abortar a inicialização.")
-    exit(1)
+  File "<frozen runpy>", line 198, in _run_module_as_main
 
-print(f"A conectar-se a: {db_uri.split('@')[1]}") # Mostra o host sem a senha
+  File "<frozen runpy>", line 88, in _run_code
 
-# Configura a app para usar a URI
-if db_uri.startswith("postgres://"):
-    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+  File "/app/src/init_db.py", line 5, in <module>
 
-try:
-    # O contexto da app é necessário para o SQLAlchemy funcionar
-    with app.app_context():
-        print("A tentar criar as tabelas...")
-        db.create_all()
-        print("Comando 'db.create_all()' executado.")
+    from .main import app, db
 
-        # Verificação final
-        inspector = inspect(db.engine)
-        tables = inspector.get_table_names()
-        print(f"Tabelas encontradas após a criação: {tables}")
-        if 'gastos' in tables:
-            print("SUCESSO: Tabela 'gastos' criada com sucesso no banco de dados.")
-        else:
-            print("AVISO: Tabela 'gastos' não foi encontrada após a execução.")
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
 
-except Exception as e:
-    print(f"Ocorreu um erro durante a inicialização do banco de dados: {e}")
-    exit(1)
+--- DEBUG INFO ---
 
-print("--- Script de inicialização do banco de dados concluído ---")
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+
+--- DEBUG INFO ---
+
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+
+--- DEBUG INFO ---
+
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+Starting Container
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+
+--- DEBUG INFO ---
+
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+
+--- DEBUG INFO ---
+
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)
+
+--- DEBUG INFO ---
+
+A chave da API do Gemini foi encontrada? True
+
+Chave começa com: AIza...
+
+--------------------
+
+A iniciar o servidor Gunicorn com logs imediatos...
+
+usage: gunicorn [OPTIONS] [APP_MODULE]
+
+gunicorn: error: unrecognized arguments: --unbuffered
+
+--- A iniciar o processo de deploy com Application Factory ---
+
+A executar o script de inicialização do banco de dados...
+
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+
+  File "<frozen runpy>", line 88, in _run_code
+
+  File "/app/src/init_db.py", line 5, in <module>
+
+    from .main import app, db
+
+ImportError: cannot import name 'app' from 'src.main' (/app/src/main.py)

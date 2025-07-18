@@ -12,5 +12,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Comando para iniciar o servidor usando o formato "shell"
-# Isto garante que a variável de ambiente $PORT seja lida corretamente.
-CMD gunicorn --bind 0.0.0.0:$PORT 'src.main:create_app()'
+# A referência à aplicação deve ser o nome da função, sem os parênteses.
+CMD gunicorn --bind 0.0.0.0:$PORT 'src.main:create_app'

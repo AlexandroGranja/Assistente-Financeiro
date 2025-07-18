@@ -63,3 +63,22 @@ def serve(path):
 # Executa o servidor
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+
+
+# Em src/main.py
+
+# ... (todo o seu código existente antes disto) ...
+
+# ROTA TEMPORÁRIA PARA FORÇAR A CRIAÇÃO DO BANCO DE DADOS
+@app.route('/init-db')
+def init_db():
+    with app.app_context():
+        try:
+            db.create_all()
+            return "Tabelas criadas com sucesso!"
+        except Exception as e:
+            return f"Erro ao criar tabelas: {str(e)}"
+
+# Executa o servidor
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

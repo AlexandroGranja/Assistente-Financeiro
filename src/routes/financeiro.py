@@ -10,10 +10,17 @@ from ..models.user import db
 
 financeiro_bp = Blueprint('financeiro', __name__)
 
-# Configuração da API do Gemini (isso já deve estar funcionando)
+# Configuração da API do Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+print(f"--- DEBUG INFO ---")
+print(f"A chave da API do Gemini foi encontrada? {GEMINI_API_KEY is not None}")
 if GEMINI_API_KEY:
+    print(f"Chave começa com: {GEMINI_API_KEY[:4]}...") # Mostra apenas o início da chave por segurança
     genai.configure(api_key=GEMINI_API_KEY)
+else:
+    print("AVISO: A variável de ambiente GEMINI_API_KEY não foi encontrada.")
+print(f"--------------------")
 
 # Função para chamar o Gemini e extrair dados da mensagem
 def extrair_dados_com_gemini(mensagem):

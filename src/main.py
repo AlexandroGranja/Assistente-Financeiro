@@ -6,23 +6,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from src.models.user import db, User
-from src.models.gasto import Gasto  # <-- ADICIONEI ESTA LINHA
+from src.models.gasto import Gasto
 from src.routes.user import user_bp
 from src.routes.financeiro import financeiro_bp
 
-# Inicializa o app
+# 1. Inicializa o app
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
-# Habilita o CORS para todas as rotas
+# 2. Habilita o CORS para todas as rotas
 CORS(app)
 
-# Registra os Blueprints (rotas da API)
+# 3. Registra os Blueprints (rotas da API)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(financeiro_bp, url_prefix='/api/financeiro')
 
-# Configura o banco de dados
-# O caminho aponta para a pasta 'database' dentro de 'src'
+# 4. Configura o banco de dados para funcionar no Railway e localmente
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     # Substitui o protocolo para compatibilidade com SQLAlchemy
@@ -36,14 +35,10 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Inicializa o banco de dados com o app
+# 5. Inicializa o banco de dados com o app
 db.init_app(app)
 
-# Cria todas as tabelas (agora inclui User e Gasto) dentro do contexto da aplicação
-with app.app_context():
-    db.create_all()
-
-# Rota para servir o frontend (ex: React, Angular, Vue ou HTML simples)
+# 6. Rota para servir o frontend (ex: React, Angular, Vue ou HTML simples)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -60,16 +55,7 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-# Executa o servidor
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
-
-# Em src/main.py
-
-# ... (todo o seu código existente antes disto) ...
-
-# ROTA TEMPORÁRIA PARA FORÇAR A CRIAÇÃO DO BANCO DE DADOS
+# 7. ROTA TEMPORÁRIA PARA FORÇAR A CRIAÇÃO DO BANCO DE DADOS
 @app.route('/init-db')
 def init_db():
     with app.app_context():
@@ -79,8 +65,6 @@ def init_db():
         except Exception as e:
             return f"Erro ao criar tabelas: {str(e)}"
 
-# Executa o servidor
+# 8. Executa o servidor
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-    

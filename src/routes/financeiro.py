@@ -27,7 +27,7 @@ def extrair_dados_com_gemini(mensagem):
     if not GEMINI_API_KEY:
         return None
         
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.0-pro')
     prompt = f"""
         Analise a seguinte mensagem de um usuário registrando um gasto e extraia a descrição, o valor e a categoria.
         Retorne os dados em formato JSON com as chaves "descricao", "valor" e "categoria".

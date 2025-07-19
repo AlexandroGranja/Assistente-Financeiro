@@ -2,11 +2,12 @@ import os
 import json
 import re
 from flask import Blueprint, request, jsonify
+# Importa os modelos e a instância 'db' partilhada
 from src.models.gasto import Gasto
-from src.models.user import User, db # Importa o User e o db
+from src.models.user import User, db 
 import google.generativeai as genai
 
-# Tenta configurar a chave da API do Gemini a partir das variáveis de ambiente
+# Configuração da API do Gemini
 try:
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     if not GEMINI_API_KEY:
@@ -22,14 +23,11 @@ except Exception as e:
 financeiro_bp = Blueprint('financeiro', __name__)
 
 def extrair_dados_de_gasto_com_ia(query):
-    """
-    Usa a API do Gemini para extrair descrição, valor e categoria de uma frase.
-    """
+    """Usa a API do Gemini para extrair dados de uma frase."""
     if not GEMINI_API_KEY:
         return {'error': "A chave da API do Gemini não foi configurada no servidor."}
 
     model = genai.GenerativeModel('gemini-1.5-flash')
-
     prompt = f"""
     Analise a frase a seguir e retorne APENAS um objeto JSON com as chaves "descricao", "valor" e "categoria".
     - "descricao": Um resumo do gasto.
@@ -54,14 +52,11 @@ def extrair_dados_de_gasto_com_ia(query):
 
 @financeiro_bp.route('/registrar_gasto', methods=['POST'])
 def registrar_gasto_endpoint():
-    """
-    Endpoint para registrar um novo gasto. Agora inclui a lógica para encontrar ou criar um utilizador.
-    """
+    """Endpoint para registrar um novo gasto."""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Corpo da requisição inválido ou não é JSON.'}), 400
 
-    # O user_id recebido do n8n é, na verdade, o número de telefone
     phone_number = data.get('user_id') 
     query = data.get('query')
 
@@ -69,17 +64,15 @@ def registrar_gasto_endpoint():
         return jsonify({'error': 'Os campos user_id (telefone) e query são obrigatórios.'}), 400
 
     try:
-        # --- LÓGICA PARA ENCONTRAR OU CRIAR UTILIZADOR ---
+        # Encontra ou cria o utilizador
         user = User.query.filter_by(phone_number=phone_number).first()
         if not user:
-            # Se o utilizador não existe, cria um novo
             user = User(phone_number=phone_number)
             db.session.add(user)
-            # Faz commit para que o 'user' receba um ID da base de dados
             db.session.commit()
             print(f"--- INFO: Novo utilizador criado com o telefone {phone_number} e ID {user.id} ---")
         
-        # --- LÓGICA DA IA ---
+        # Extrai dados com a IA
         dados_gasto = extrair_dados_de_gasto_com_ia(query)
         if 'error' in dados_gasto:
             return jsonify({'error': dados_gasto['error']}), 500
@@ -89,14 +82,14 @@ def registrar_gasto_endpoint():
         categoria = dados_gasto.get('categoria')
 
         if not all([descricao, valor, categoria]):
-            return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias (descrição, valor, categoria). Tente ser mais específico(a).' }), 400
+            return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias.' }), 400
 
-        # --- CRIAÇÃO DO GASTO COM O user.id CORRETO ---
+        # Cria e guarda o novo gasto
         novo_gasto = Gasto(
             descricao=str(descricao),
             valor=float(valor),
             categoria=str(categoria),
-            user_id=user.id  # Usa o ID numérico correto do utilizador
+            user_id=user.id
         )
         db.session.add(novo_gasto)
         db.session.commit()

@@ -82,13 +82,12 @@ def consultar_gastos_endpoint():
     return jsonify({'response': resposta})
 
 
-# --- ROTA DE CONSELHO (CÓDIGO MELHORADO) ---
+# --- ROTA DE CONSELHO (COM A CORREÇÃO FINAL) ---
 @financeiro_bp.route('/gerar_conselho', methods=['POST'])
 def gerar_conselho_endpoint():
     """
     Endpoint para gerar um conselho financeiro personalizado e sincero usando a IA.
     """
-    # Configura a API do Gemini
     try:
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
@@ -112,20 +111,13 @@ def gerar_conselho_endpoint():
     if not gastos:
         return jsonify({'response': 'Você não tem gastos recentes para eu analisar.'})
     
-    # Formata a lista de gastos para enviar à IA
     lista_de_gastos_texto = "\n".join([f"- {g.descricao} (categoria: {g.categoria}): R$ {g.valor:.2f}" for g in gastos])
     total_gasto = sum(g.valor for g in gastos)
 
-    # Cria o novo prompt, mais direto e com instruções claras
     prompt = f"""
-    Aja como um consultor financeiro pessoal, direto e sem rodeios. Seu objetivo é ajudar o usuário a economizar dinheiro, não apenas informá-lo.
-    Analise a lista de gastos dos últimos 30 dias de um usuário. Identifique padrões de consumo, aponte gastos que parecem supérfluos e dê conselhos práticos e acionáveis.
-
-    **Instruções:**
-    1.  Comece com uma análise direta do total gasto.
-    2.  Use exemplos DIRETOS da lista de gastos para ilustrar seus pontos. Se o usuário gastou muito com "cerveja" ou "ifood", mencione isso.
-    3.  Ofereça alternativas ou sugestões claras. Em vez de "gaste menos com comida", sugira "Percebi que você gastou X com iFood. Que tal definir um limite de 2 pedidos por semana e cozinhar mais em casa?".
-    4.  Termine com uma nota positiva ou um incentivo.
+    Aja como um consultor financeiro pessoal, direto e sem rodeios. Seu objetivo é ajudar o usuário a economizar dinheiro.
+    Analise a lista de gastos dos últimos 30 dias de um usuário. Identifique padrões de consumo e dê conselhos práticos.
+    Use exemplos DIRETOS da lista de gastos para ilustrar seus pontos.
 
     **Dados do Usuário:**
     - Total Gasto nos Últimos 30 Dias: R$ {total_gasto:.2f}
@@ -136,8 +128,19 @@ def gerar_conselho_endpoint():
     """
 
     try:
-        # Chama a IA para gerar o conselho
-        response = model.generate_content(prompt)
+        # Adiciona configurações de segurança para evitar bloqueios desnecessários
+        safety_settings = {
+            'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
+            'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
+            'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+            'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
+        }
+
+        # Chama a IA com as novas configurações
+        response = model.generate_content(
+            prompt,
+            safety_settings=safety_settings
+        )
         conselho = response.text
     except Exception as e:
         current_app.logger.error(f"Erro ao chamar a API do Gemini para gerar conselho: {e}")

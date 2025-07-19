@@ -2,7 +2,8 @@ import os
 import json
 import re
 from flask import Blueprint, request, jsonify
-from src.models.gasto import Gasto, db
+from src.models.gasto import Gasto
+from src.models.user import User, db # Importa o User e o db
 import google.generativeai as genai
 
 # Tenta configurar a chave da API do Gemini a partir das variáveis de ambiente
@@ -23,16 +24,12 @@ financeiro_bp = Blueprint('financeiro', __name__)
 def extrair_dados_de_gasto_com_ia(query):
     """
     Usa a API do Gemini para extrair descrição, valor e categoria de uma frase.
-    Esta versão é mais robusta para extrair JSON da resposta da IA.
     """
     if not GEMINI_API_KEY:
-        # Retorna um erro claro se a chave da API não estiver disponível
         return {'error': "A chave da API do Gemini não foi configurada no servidor."}
 
-    # Cria o modelo generativo com o nome correto e mais recente
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-    # Prompt melhorado: mais direto e com instruções claras para evitar texto extra.
     prompt = f"""
     Analise a frase a seguir e retorne APENAS um objeto JSON com as chaves "descricao", "valor" e "categoria".
     - "descricao": Um resumo do gasto.
@@ -44,21 +41,13 @@ def extrair_dados_de_gasto_com_ia(query):
     
     try:
         response = model.generate_content(prompt)
-        
-        # Lógica de extração de JSON mais robusta
-        # Procura por um bloco JSON delimitado por ```json e ``` ou por { e }
         match = re.search(r'```json\s*(\{.*?\})\s*```|(\{.*?\})', response.text, re.DOTALL)
-        
         if match:
-            # Pega o primeiro grupo que não for nulo (o bloco JSON)
             json_str = next((g for g in match.groups() if g is not None), None)
             if json_str:
                 return json.loads(json_str)
-
-        # Se não encontrar um bloco JSON, retorna um erro
         print(f"--- AVISO: A resposta da IA não continha um JSON válido. Resposta: {response.text} ---")
         return {'error': 'A IA retornou uma resposta em formato inesperado.'}
-
     except Exception as e:
         print(f"--- ERRO: Exceção na chamada da API do Gemini ou no processamento: {e} ---")
         return {'error': f'Ocorreu um erro ao comunicar com a IA: {e}'}
@@ -66,23 +55,32 @@ def extrair_dados_de_gasto_com_ia(query):
 @financeiro_bp.route('/registrar_gasto', methods=['POST'])
 def registrar_gasto_endpoint():
     """
-    Endpoint para registrar um novo gasto a partir de uma query em linguagem natural.
+    Endpoint para registrar um novo gasto. Agora inclui a lógica para encontrar ou criar um utilizador.
     """
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Corpo da requisição inválido ou não é JSON.'}), 400
 
-    user_id = data.get('user_id')
+    # O user_id recebido do n8n é, na verdade, o número de telefone
+    phone_number = data.get('user_id') 
     query = data.get('query')
 
-    if not user_id or not query:
-        return jsonify({'error': 'Os campos user_id e query são obrigatórios.'}), 400
+    if not phone_number or not query:
+        return jsonify({'error': 'Os campos user_id (telefone) e query são obrigatórios.'}), 400
 
     try:
-        # --- LÓGICA MELHORADA USANDO IA ---
+        # --- LÓGICA PARA ENCONTRAR OU CRIAR UTILIZADOR ---
+        user = User.query.filter_by(phone_number=phone_number).first()
+        if not user:
+            # Se o utilizador não existe, cria um novo
+            user = User(phone_number=phone_number)
+            db.session.add(user)
+            # Faz commit para que o 'user' receba um ID da base de dados
+            db.session.commit()
+            print(f"--- INFO: Novo utilizador criado com o telefone {phone_number} e ID {user.id} ---")
+        
+        # --- LÓGICA DA IA ---
         dados_gasto = extrair_dados_de_gasto_com_ia(query)
-
-        # Verifica se a função de IA retornou um erro
         if 'error' in dados_gasto:
             return jsonify({'error': dados_gasto['error']}), 500
 
@@ -93,11 +91,12 @@ def registrar_gasto_endpoint():
         if not all([descricao, valor, categoria]):
             return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias (descrição, valor, categoria). Tente ser mais específico(a).' }), 400
 
+        # --- CRIAÇÃO DO GASTO COM O user.id CORRETO ---
         novo_gasto = Gasto(
             descricao=str(descricao),
             valor=float(valor),
             categoria=str(categoria),
-            user_id=str(user_id) # Garante que o user_id seja uma string
+            user_id=user.id  # Usa o ID numérico correto do utilizador
         )
         db.session.add(novo_gasto)
         db.session.commit()

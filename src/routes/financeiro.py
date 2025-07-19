@@ -119,10 +119,6 @@ def gerar_conselho():
 
     genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
     model = genai.GenerativeModel('gemini-pro')
-    model = genai.GenerativeModel('gemini-pro')
-    chat = model.start_chat(history=[])
-    response = chat.send_message(prompt)
-    conselho = response.text
 
     safety_settings = [
         {"category": "HARM_CATEGORY_DEROGATORY", "threshold": "BLOCK_NONE"},

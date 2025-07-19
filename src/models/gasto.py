@@ -1,5 +1,8 @@
 from datetime import datetime
-# Importa a instância 'db' partilhada do ficheiro user.py
+# --- CORREÇÃO CRÍTICA ---
+# Em vez de criar uma nova instância da base de dados com `db = SQLAlchemy()`,
+# importamos a instância 'db' que já foi criada no ficheiro user.py.
+# Isto garante que toda a aplicação partilha a mesma ligação à base de dados.
 from .user import db
 
 class Gasto(db.Model):

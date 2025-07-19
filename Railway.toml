@@ -1,0 +1,14 @@
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+startCommand = "gunicorn --config gunicorn.conf.py app:aplicacao"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+
+[env]
+PORT = "8080"
+PYTHONUNBUFFERED = "1"
+WEB_CONCURRENCY = "1"
+THREADS = "4"

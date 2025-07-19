@@ -1,114 +1,191 @@
-import os
-import json
-import re
-from flask import Blueprint, request, jsonify
-# Importa os modelos e a instância 'db' partilhada
-from src.models.gasto import Gasto
-from src.models.user import User, db 
-import google.generativeai as genai
-
-# Configuração da API do Gemini
-try:
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    if not GEMINI_API_KEY:
-        print("--- AVISO: Variável de ambiente GEMINI_API_KEY não encontrada. ---")
-    else:
-        genai.configure(api_key=GEMINI_API_KEY)
-        print("--- DEBUG INFO: Chave da API do Gemini configurada com sucesso. ---")
-except Exception as e:
-    GEMINI_API_KEY = None
-    print(f"--- ERRO: Falha ao configurar a API do Gemini: {e} ---")
-
-
-financeiro_bp = Blueprint('financeiro', __name__)
-
-def extrair_dados_de_gasto_com_ia(query):
-    """Usa a API do Gemini para extrair dados de uma frase."""
-    if not GEMINI_API_KEY:
-        return {'error': "A chave da API do Gemini não foi configurada no servidor."}
-
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    prompt = f"""
-    Analise a frase a seguir e retorne APENAS um objeto JSON com as chaves "descricao", "valor" e "categoria".
-    - "descricao": Um resumo do gasto.
-    - "valor": O custo numérico, usando ponto como separador decimal.
-    - "categoria": Uma das seguintes: Alimentação, Transporte, Lazer, Moradia, Saúde, Educação, Outros.
-
-    Frase: "{query}"
-    """
-    
-    try:
-        response = model.generate_content(prompt)
-        match = re.search(r'```json\s*(\{.*?\})\s*```|(\{.*?\})', response.text, re.DOTALL)
-        if match:
-            json_str = next((g for g in match.groups() if g is not None), None)
-            if json_str:
-                return json.loads(json_str)
-        print(f"--- AVISO: A resposta da IA não continha um JSON válido. Resposta: {response.text} ---")
-        return {'error': 'A IA retornou uma resposta em formato inesperado.'}
-    except Exception as e:
-        print(f"--- ERRO: Exceção na chamada da API do Gemini ou no processamento: {e} ---")
-        return {'error': f'Ocorreu um erro ao comunicar com a IA: {e}'}
-
-@financeiro_bp.route('/registrar_gasto', methods=['POST'])
-def registrar_gasto_endpoint():
-    """Endpoint para registrar um novo gasto."""
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Corpo da requisição inválido ou não é JSON.'}), 400
-
-    phone_number = data.get('user_id') 
-    query = data.get('query')
-
-    if not phone_number or not query:
-        return jsonify({'error': 'Os campos user_id (telefone) e query são obrigatórios.'}), 400
-
-    try:
-        # --- LÓGICA DE TRANSAÇÃO OTIMIZADA ---
-        
-        # 1. Encontra ou prepara o utilizador
-        user = User.query.filter_by(phone_number=phone_number).first()
-        if not user:
-            user = User(phone_number=phone_number)
-            db.session.add(user)
-            # Usa flush para obter o ID do utilizador antes de fazer commit
-            db.session.flush()
-            print(f"--- INFO: Novo utilizador preparado para a transação com o telefone {phone_number} ---")
-        
-        # 2. Extrai dados com a IA
-        dados_gasto = extrair_dados_de_gasto_com_ia(query)
-        if 'error' in dados_gasto:
-            # Se a IA falhar, desfaz a adição do utilizador se ele for novo
-            db.session.rollback()
-            return jsonify({'error': dados_gasto['error']}), 500
-
-        descricao = dados_gasto.get('descricao')
-        valor = dados_gasto.get('valor')
-        categoria = dados_gasto.get('categoria')
-
-        if not all([descricao, valor, categoria]):
-            db.session.rollback()
-            return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias.' }), 400
-
-        # 3. Prepara o novo gasto
-        novo_gasto = Gasto(
-            descricao=str(descricao),
-            valor=float(valor),
-            categoria=str(categoria),
-            user_id=user.id
-        )
-        db.session.add(novo_gasto)
-        
-        # 4. Faz commit de tudo (utilizador e gasto) de uma só vez
-        db.session.commit()
-
-        return jsonify({'message': f'Gasto "{descricao}" no valor de {valor} registrado com sucesso!'}), 201
-
-    except ValueError:
-        db.session.rollback()
-        return jsonify({'error': f'O valor retornado pela IA não é um número válido.'}), 400
-    except Exception as e:
-        # Desfaz quaisquer alterações na base de dados se ocorrer um erro
-        db.session.rollback()
-        print(f"--- ERRO INTERNO NO ENDPOINT: {e} ---")
-        return jsonify({'error': 'Ocorreu um erro inesperado no servidor ao salvar os dados.'}), 500
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a4b1c2d3-e4f5-g6h7-i8j9-k0l1m2n3o4p5",
+        "options": {}
+      },
+      "id": "def70352-c9af-40a2-992a-bf2fc8279fba",
+      "name": "1. Recebe do WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('1. Recebe do WhatsApp').item.json.body.data.key.remoteJid }}",
+              "operation": "endsWith",
+              "value2": "@s.whatsapp.net"
+            }
+          ]
+        }
+      },
+      "id": "2d426452-72f7-4d97-84f3-10465799d51c",
+      "name": "2. É Contato Individual?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://assistente-financeiro-production.up.railway.app/api/financeiro/registrar_gasto",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "descricao",
+              "value": "={{ $('4. Extrai JSON da Resposta').item.json.descricao }}"
+            },
+            {
+              "name": "valor",
+              "value": "={{ $('4. Extrai JSON da Resposta').item.json.valor }}"
+            },
+            {
+              "name": "categoria",
+              "value": "={{ $('4. Extrai JSON da Resposta').item.json.categoria }}"
+            },
+            {
+              "name": "user_id",
+              "value": "={{ $('1. Recebe do WhatsApp').item.json.body.data.key.remoteJid.split('@')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5bddf751-3948-490d-aafe-cd8cd551ebb7",
+      "name": "5. Envia para o Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        580,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "teste",
+        "remoteJid": "={{ $('1. Recebe do WhatsApp').item.json.body.data.key.remoteJid }}",
+        "messageText": "={{ $('5. Envia para o Backend').item.json.message }}",
+        "options_message": {}
+      },
+      "id": "67b12c85-b9b0-4bfd-a5fb-edf14d56c66e",
+      "name": "6. Envia Resposta (WhatsApp)",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        820,
+        60
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "SoqZJgqidLMClr2b",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gemini-1.5-flash",
+        "prompt": "Analise a frase a seguir e retorne APENAS um objeto JSON com as chaves \"descricao\", \"valor\" e \"categoria\".\n- \"descricao\": Um resumo do gasto.\n- \"valor\": O custo numérico, usando ponto como separador decimal.\n- \"categoria\": Uma das seguintes: Alimentação, Transporte, Lazer, Moradia, Saúde, Educação, Outros.\n\nFrase: \"{{ $('1. Recebe do WhatsApp').item.json.body.data.message.conversation || $('1. Recebe do WhatsApp').item.json.body.data.message.extendedTextMessage.text }}\"",
+        "options": {}
+      },
+      "id": "a9a3f9e2-5c96-41f3-80b1-3e4e6b12c47d",
+      "name": "3. Processa com IA",
+      "type": "n8n-nodes-base.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        100,
+        60
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google AI Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "json",
+        "json": "={{ $json.text.match(/\\{.*\\}/s)[0] }}",
+        "options": {}
+      },
+      "id": "9d9e6f2b-8a1c-4b5d-9f3e-7c8d9a0b1c2d",
+      "name": "4. Extrai JSON da Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "1. Recebe do WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "2. É Contato Individual?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. É Contato Individual?": {
+      "main": [
+        [
+          {
+            "node": "3. Processa com IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Processa com IA": {
+      "main": [
+        [
+          {
+            "node": "4. Extrai JSON da Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Extrai JSON da Resposta": {
+      "main": [
+        [
+          {
+            "node": "5. Envia para o Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Envia para o Backend": {
+      "main": [
+        [
+          {
+            "node": "6. Envia Resposta (WhatsApp)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

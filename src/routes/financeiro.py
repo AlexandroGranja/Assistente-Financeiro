@@ -29,8 +29,8 @@ def extrair_dados_de_gasto_com_ia(query):
         # Retorna um erro claro se a chave da API não estiver disponível
         return {'error': "A chave da API do Gemini não foi configurada no servidor."}
 
-    # Cria o modelo generativo
-    model = genai.GenerativeModel('gemini-pro')
+    # Cria o modelo generativo com o nome correto e mais recente
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
     # Prompt melhorado: mais direto e com instruções claras para evitar texto extra.
     prompt = f"""

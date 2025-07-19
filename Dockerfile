@@ -18,4 +18,5 @@ EXPOSE 8080
 
 # --- COMANDO ATUALIZADO COM LOGGING DETALHADO ---
 # Inicia o servidor Gunicorn, forçando os logs (debug, access, error) a serem exibidos.
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--log-level=debug", "--access-logfile=-", "--error-logfile=-", "wsgi:app"]
+# Esta sintaxe (sem os []) permite que o shell substitua a variável $PORT.
+CMD gunicorn --bind "0.0.0.0:$PORT" --log-level=debug --access-logfile=- --error-logfile=- wsgi:app

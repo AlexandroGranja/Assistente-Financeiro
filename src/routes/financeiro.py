@@ -1,104 +1,99 @@
-# Em src/routes/financeiro.py
-from flask import Blueprint, request, jsonify
-from datetime import datetime
-import google.generativeai as genai
 import os
+import json
+from flask import Blueprint, request, jsonify
+from src.models.gasto import Gasto, db
+import google.generativeai as genai
 
-# Importe os modelos e o objeto 'db'
-from ..models.gasto import Gasto
-from ..models.user import db
+# Configura a chave da API do Gemini a partir das variáveis de ambiente
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    print("--- DEBUG INFO: Chave da API do Gemini configurada. ---")
+else:
+    print("--- AVISO: Chave da API do Gemini não encontrada. A funcionalidade de IA estará desativada. ---")
 
 financeiro_bp = Blueprint('financeiro', __name__)
 
-# Configuração da API do Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-print(f"--- DEBUG INFO ---")
-print(f"A chave da API do Gemini foi encontrada? {GEMINI_API_KEY is not None}")
-if GEMINI_API_KEY:
-    print(f"Chave começa com: {GEMINI_API_KEY[:4]}...") # Mostra apenas o início da chave por segurança
-    genai.configure(api_key=GEMINI_API_KEY)
-else:
-    print("AVISO: A variável de ambiente GEMINI_API_KEY não foi encontrada.")
-print(f"--------------------")
-
-# Função para chamar o Gemini e extrair dados da mensagem
-def extrair_dados_com_gemini(mensagem):
-    if not GEMINI_API_KEY:
-        return None
-        
-    model = genai.GenerativeModel('gemini-1.0-pro')
-    prompt = f"""
-        Analise a seguinte mensagem de um usuário registrando um gasto e extraia a descrição, o valor e a categoria.
-        Retorne os dados em formato JSON com as chaves "descricao", "valor" e "categoria".
-        Exemplo de mensagem: "Almoço 25.50 alimentação"
-        Exemplo de saída: {{"descricao": "Almoço", "valor": 25.50, "categoria": "alimentação"}}
-        Mensagem do usuário: "{mensagem}"
+def extrair_dados_de_gasto_com_ia(query):
     """
+    Usa a API do Gemini para extrair descrição, valor e categoria de uma frase.
+    """
+    if not GEMINI_API_KEY:
+        raise ValueError("A chave da API do Gemini não foi configurada.")
+
+    # Cria o modelo generativo
+    model = genai.GenerativeModel('gemini-pro')
+
+    # Prompt para a IA, instruindo o que fazer e o formato da resposta
+    prompt = f"""
+    Analise a frase de um gasto e extraia as seguintes informações:
+    1.  "descricao": Um resumo do que foi o gasto.
+    2.  "valor": O custo numérico do gasto.
+    3.  "categoria": Uma das seguintes categorias: Alimentação, Transporte, Lazer, Moradia, Saúde, Educação, Outros.
+
+    A resposta DEVE ser um objeto JSON válido.
+
+    Frase para análise: "{query}"
+
+    Exemplo de resposta JSON:
+    {{
+      "descricao": "Café na padaria",
+      "valor": 7.50,
+      "categoria": "Alimentação"
+    }}
+    """
+    
     try:
         response = model.generate_content(prompt)
-        # Limpa a saída para ser um JSON válido
-        json_response = response.text.strip().replace('`', '').replace('json', '')
-        return json.loads(json_response)
+        # Limpa a resposta para garantir que é um JSON válido
+        cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
+        return json.loads(cleaned_response)
     except Exception as e:
-        print(f"Erro ao chamar a API do Gemini: {e}")
+        print(f"Erro na API do Gemini: {e}")
+        # Retorna None em caso de falha na comunicação com a IA
         return None
 
-@financeiro_bp.route('/processar_mensagem', methods=['POST'])
-def processar_mensagem():
+@financeiro_bp.route('/registrar_gasto', methods=['POST'])
+def registrar_gasto_endpoint():
+    """
+    Endpoint para registrar um novo gasto a partir de uma query em linguagem natural.
+    """
     data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({"error": "Mensagem não fornecida"}), 400
+    user_id = data.get('user_id')
+    query = data.get('query')
 
-    mensagem = data['message'].lower()
-    today = datetime.now().strftime('%Y-%m-%d')
+    if not user_id or not query:
+        return jsonify({'error': 'Os campos user_id e query são obrigatórios.'}), 400
 
-    # Comandos especiais
-    if mensagem == 'total':
-        total_gasto = db.session.query(db.func.sum(Gasto.valor)).scalar() or 0.0
-        return jsonify({"response": f"💸 O total de gastos registrado é: R$ {total_gasto:.2f}"})
-    
-    # Adicionar lógica para outros comandos como 'conselho', 'ajuda', etc.
-
-    # Processamento normal de gastos via Gemini
-    dados_gasto = extrair_dados_com_gemini(mensagem)
-    
-    if not dados_gasto or not all(k in dados_gasto for k in ["descricao", "valor", "categoria"]):
-         return jsonify({"error": "Não foi possível processar a sua mensagem. Tente o formato: 'descrição valor categoria'."}), 400
-
-    # Crie o novo objeto Gasto
-    novo_gasto = Gasto(
-        data=today,
-        descricao=dados_gasto['descricao'].capitalize(),
-        valor=float(dados_gasto['valor']),
-        categoria=dados_gasto['categoria'].lower()
-    )
-
-    # Adicione ao banco de dados
-    db.session.add(novo_gasto)
-    db.session.commit()
-
-    response_text = f"✅ Gasto registrado!\n💸 {novo_gasto.descricao}: R$ {novo_gasto.valor:.2f}\n📂 Categoria: {novo_gasto.categoria}"
-    
-    return jsonify({
-        "response": response_text,
-        "data": novo_gasto.to_dict()
-    }), 200
-
-
-@financeiro_bp.route('/relatorio', methods=['GET'])
-def gerar_relatorio():
     try:
-        # Consulta todos os gastos no banco de dados
-        todos_os_gastos = Gasto.query.order_by(Gasto.data.desc()).all()
-        
-        # Converte os objetos para dicionários
-        gastos_dict = [gasto.to_dict() for gasto in todos_os_gastos]
+        # --- LÓGICA MELHORADA USANDO IA ---
+        dados_gasto = extrair_dados_de_gasto_com_ia(query)
 
-        if not gastos_dict:
-            return jsonify({"mensagem": "Nenhum gasto registrado ainda."})
+        if not dados_gasto:
+            return jsonify({'error': 'Não foi possível processar a sua mensagem com a IA. Tente novamente.'}), 500
 
-        return jsonify(gastos_dict)
+        descricao = dados_gasto.get('descricao')
+        valor = dados_gasto.get('valor')
+        categoria = dados_gasto.get('categoria')
 
+        if not all([descricao, valor, categoria]):
+            return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias. Tente ser mais específico(a).'}), 400
+
+        novo_gasto = Gasto(
+            descricao=str(descricao),
+            valor=float(valor),
+            categoria=str(categoria),
+            user_id=int(user_id)
+        )
+        db.session.add(novo_gasto)
+        db.session.commit()
+
+        return jsonify({'message': f'Gasto "{descricao}" registrado com sucesso!'}), 201
+
+    except ValueError as ve:
+        # Erro caso o valor não seja um número
+        return jsonify({'error': f'Erro ao processar o valor do gasto: {ve}'}), 400
     except Exception as e:
-        return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
+        db.session.rollback()
+        print(f"ERRO INTERNO: {e}")
+        return jsonify({'error': 'Ocorreu um erro inesperado no servidor.'}), 500

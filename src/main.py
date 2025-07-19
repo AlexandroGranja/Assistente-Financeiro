@@ -7,7 +7,7 @@ from flask_cors import CORS
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Importa o db a partir do user.py, que será a nossa fonte única
-from src.models.user import db, User 
+from src.models.user import db, User
 from src.models.gasto import Gasto
 from src.routes.user import user_bp
 from src.routes.financeiro import financeiro_bp
@@ -41,6 +41,11 @@ def create_app():
     # Inicializa o banco de dados com o app
     db.init_app(app)
 
+    # --- CORREÇÃO AQUI ---
+    # Garante que as tabelas do banco de dados sejam criadas
+    with app.app_context():
+        db.create_all()
+
     # Regista os Blueprints (rotas da API)
     app.register_blueprint(user_bp, url_prefix='/api')
     app.register_blueprint(financeiro_bp, url_prefix='/api/financeiro')
@@ -67,8 +72,5 @@ def create_app():
 # Bloco para execução local
 if __name__ == '__main__':
     app = create_app()
-    # Adiciona o contexto da aplicação para criar as tabelas localmente se não existirem
-    with app.app_context():
-        db.create_all()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)

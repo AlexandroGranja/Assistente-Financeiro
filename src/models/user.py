@@ -4,7 +4,8 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    phone_number = db.Column(db.String(50), unique=True, nullable=False) # Campo necessário
+    # A coluna correta que precisamos:
+    phone_number = db.Column(db.String(50), unique=True, nullable=False) 
 
     def __repr__(self):
         return f'<User {self.phone_number}>'

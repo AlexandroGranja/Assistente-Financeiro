@@ -83,6 +83,8 @@ def consultar_gastos_endpoint():
 
 
 # --- ROTA DE CONSELHO (COM A CORREÇÃO FINAL) ---
+# (As outras rotas e importações no topo do arquivo continuam as mesmas)
+
 @financeiro_bp.route('/gerar_conselho', methods=['POST'])
 def gerar_conselho_endpoint():
     """
@@ -128,7 +130,8 @@ def gerar_conselho_endpoint():
     """
 
     try:
-        # Adiciona configurações de segurança para evitar bloqueios desnecessários
+        # --- ESTA É A ALTERAÇÃO CRUCIAL ---
+        # Adicionamos configurações de segurança para evitar bloqueios desnecessários.
         safety_settings = {
             'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
             'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
@@ -136,7 +139,7 @@ def gerar_conselho_endpoint():
             'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
         }
 
-        # Chama a IA com as novas configurações
+        # Chama a IA com as novas configurações de segurança
         response = model.generate_content(
             prompt,
             safety_settings=safety_settings

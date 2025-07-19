@@ -64,17 +64,22 @@ def registrar_gasto_endpoint():
         return jsonify({'error': 'Os campos user_id (telefone) e query são obrigatórios.'}), 400
 
     try:
-        # Encontra ou cria o utilizador
+        # --- LÓGICA DE TRANSAÇÃO OTIMIZADA ---
+        
+        # 1. Encontra ou prepara o utilizador
         user = User.query.filter_by(phone_number=phone_number).first()
         if not user:
             user = User(phone_number=phone_number)
             db.session.add(user)
-            db.session.commit()
-            print(f"--- INFO: Novo utilizador criado com o telefone {phone_number} e ID {user.id} ---")
+            # Usa flush para obter o ID do utilizador antes de fazer commit
+            db.session.flush()
+            print(f"--- INFO: Novo utilizador preparado para a transação com o telefone {phone_number} ---")
         
-        # Extrai dados com a IA
+        # 2. Extrai dados com a IA
         dados_gasto = extrair_dados_de_gasto_com_ia(query)
         if 'error' in dados_gasto:
+            # Se a IA falhar, desfaz a adição do utilizador se ele for novo
+            db.session.rollback()
             return jsonify({'error': dados_gasto['error']}), 500
 
         descricao = dados_gasto.get('descricao')
@@ -82,9 +87,10 @@ def registrar_gasto_endpoint():
         categoria = dados_gasto.get('categoria')
 
         if not all([descricao, valor, categoria]):
+            db.session.rollback()
             return jsonify({'error': 'A IA não conseguiu extrair todas as informações necessárias.' }), 400
 
-        # Cria e guarda o novo gasto
+        # 3. Prepara o novo gasto
         novo_gasto = Gasto(
             descricao=str(descricao),
             valor=float(valor),
@@ -92,13 +98,17 @@ def registrar_gasto_endpoint():
             user_id=user.id
         )
         db.session.add(novo_gasto)
+        
+        # 4. Faz commit de tudo (utilizador e gasto) de uma só vez
         db.session.commit()
 
         return jsonify({'message': f'Gasto "{descricao}" no valor de {valor} registrado com sucesso!'}), 201
 
     except ValueError:
-        return jsonify({'error': f'O valor "{valor}" retornado pela IA não é um número válido.'}), 400
+        db.session.rollback()
+        return jsonify({'error': f'O valor retornado pela IA não é um número válido.'}), 400
     except Exception as e:
+        # Desfaz quaisquer alterações na base de dados se ocorrer um erro
         db.session.rollback()
         print(f"--- ERRO INTERNO NO ENDPOINT: {e} ---")
         return jsonify({'error': 'Ocorreu um erro inesperado no servidor ao salvar os dados.'}), 500

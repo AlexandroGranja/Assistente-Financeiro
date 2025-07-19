@@ -82,74 +82,82 @@ def consultar_gastos_endpoint():
     return jsonify({'response': resposta})
 
 
-# --- ROTA DE CONSELHO (COM A CORREÇÃO FINAL) ---
-# (As outras rotas e importações no topo do arquivo continuam as mesmas)
-
+# --- ROTA DE CONSELHO ---
 @financeiro_bp.route('/gerar_conselho', methods=['POST'])
-def gerar_conselho_endpoint():
-    """
-    Endpoint para gerar um conselho financeiro personalizado e sincero usando a IA.
-    """
-    try:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("A chave da API do Gemini não foi encontrada nas variáveis de ambiente.")
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
-    except Exception as e:
-        current_app.logger.error(f"Erro ao configurar a API do Gemini: {e}")
-        return jsonify({'response': 'Desculpe, estou com problemas para me conectar à minha inteligência. Tente novamente mais tarde.'})
-
+def gerar_conselho():
     data = request.get_json()
-    phone_number = data.get('user_id')
+    user_id = data.get('user_id')
 
-    user = User.query.filter_by(phone_number=str(phone_number)).first()
-    if not user:
-        return jsonify({'response': 'Você precisa ter alguns gastos registrados para eu poder te dar um conselho.'})
-
-    start_date = datetime.utcnow() - timedelta(days=30)
-    gastos = Gasto.query.filter(Gasto.user_id == user.id, Gasto.data >= start_date).all()
-
-    if not gastos:
-        return jsonify({'response': 'Você não tem gastos recentes para eu analisar.'})
-    
-    lista_de_gastos_texto = "\n".join([f"- {g.descricao} (categoria: {g.categoria}): R$ {g.valor:.2f}" for g in gastos])
-    total_gasto = sum(g.valor for g in gastos)
-
-    prompt = f"""
-    Aja como um consultor financeiro pessoal, direto e sem rodeios. Seu objetivo é ajudar o usuário a economizar dinheiro.
-    Analise a lista de gastos dos últimos 30 dias de um usuário. Identifique padrões de consumo e dê conselhos práticos.
-    Use exemplos DIRETOS da lista de gastos para ilustrar seus pontos.
-
-    **Dados do Usuário:**
-    - Total Gasto nos Últimos 30 Dias: R$ {total_gasto:.2f}
-    - Lista de Gastos:
-    {lista_de_gastos_texto}
-
-    **Sua Resposta:**
-    """
+    if not user_id:
+        return jsonify({'error': 'user_id é obrigatório'}), 400
 
     try:
-        # --- ESTA É A ALTERAÇÃO CRUCIAL ---
-        # Adicionamos configurações de segurança para evitar bloqueios desnecessários.
-        safety_settings = {
-            'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
-            'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE',
-            'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
-            'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE'
-        }
-
-        # Chama a IA com as novas configurações de segurança
-        response = model.generate_content(
-            prompt,
-            safety_settings=safety_settings
+        conexao = mysql.connector.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAME')
         )
-        conselho = response.text
-    except Exception as e:
-        current_app.logger.error(f"Erro ao chamar a API do Gemini para gerar conselho: {e}")
-        conselho = "Não consegui gerar um conselho personalizado no momento, mas uma dica geral é sempre anotar seus gastos para ter mais controle."
 
-    return jsonify({'response': conselho})
+        cursor = conexao.cursor(dictionary=True)
+
+        hoje = datetime.now()
+        trinta_dias_atras = hoje - timedelta(days=30)
+
+        query = """
+        SELECT categoria, SUM(valor) as total
+        FROM gastos
+        WHERE user_id = %s AND data >= %s
+        GROUP BY categoria
+        """
+        cursor.execute(query, (user_id, trinta_dias_atras))
+        resultados = cursor.fetchall()
+
+        if not resultados:
+            return jsonify({'response': 'Você ainda não possui gastos suficientes para gerar um conselho.'})
+
+        texto_gastos = "\n".join([f"{item['categoria']}: R${item['total']:.2f}" for item in resultados])
+
+        prompt = (
+            "Você é um assistente financeiro. Com base nos gastos do usuário nas últimas 4 semanas, "
+            "gere um conselho personalizado de forma empática e profissional.\n"
+            f"Gastos:\n{texto_gastos}\n"
+            "Conselho:"
+        )
+
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        model = genai.GenerativeModel('gemini-pro')
+
+        safety_settings = [
+            {"category": "HARM_CATEGORY_DEROGATORY", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_TOXICITY", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_VIOLENCE", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUAL", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_MEDICAL", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS", "threshold": "BLOCK_NONE"}
+        ]
+
+        try:
+            response = model.generate_content(prompt, safety_settings=safety_settings)
+            conselho_raw = response.text if response and response.text else ""
+            conselho = re.sub(r"```.*?```", "", conselho_raw, flags=re.DOTALL).strip()
+
+        except Exception as e:
+            current_app.logger.error(f"Erro ao chamar a API do Gemini para gerar conselho: {e}")
+            conselho = (
+                "Não consegui gerar um conselho personalizado no momento, mas uma dica geral é sempre anotar seus gastos para ter mais controle."
+            )
+
+        return jsonify({'response': conselho})
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar conselho: {e}")
+        return jsonify({'error': 'Erro ao gerar conselho'}), 500
+
+    finally:
+        if conexao.is_connected():
+            cursor.close()
+            conexao.close()
 
 
 # --- ROTA DE AJUDA (SEM ALTERAÇÕES) ---

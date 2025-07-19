@@ -1,15 +1,21 @@
-# Usar uma imagem base oficial do Python
-FROM python:3.11-slim
+# Usa uma imagem base oficial do Python
+FROM python:3.9-slim
 
-# Definir o diretório de trabalho dentro do contêiner
+# Define o diretório de trabalho no contentor
 WORKDIR /app
 
-# Copiar o ficheiro de dependências e instalar
+# Copia o ficheiro de dependências
 COPY requirements.txt .
+
+# Instala as dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar todo o resto do código do projeto para o contêiner
+# Copia o resto do código da aplicação
 COPY . .
 
-# Comando para iniciar o servidor usando o ficheiro wsgi.py
-CMD gunicorn --bind "0.0.0.0:$PORT" wsgi:app
+# Expõe a porta que o Gunicorn vai usar
+EXPOSE 8080
+
+# --- COMANDO ATUALIZADO COM LOGGING DETALHADO ---
+# Inicia o servidor Gunicorn, forçando os logs (debug, access, error) a serem exibidos.
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--log-level=debug", "--access-logfile=-", "--error-logfile=-", "wsgi:app"]

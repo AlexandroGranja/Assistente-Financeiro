@@ -1,24 +1,25 @@
-# Em src/models/gasto.py
-from .user import db # Reutilizamos a mesma instância do db
+from datetime import datetime
+# Importa a instância 'db' partilhada do ficheiro user.py
+from .user import db
 
 class Gasto(db.Model):
-    __tablename__ = 'gastos' # Nome da tabela no banco de dados
-
+    __tablename__ = 'gastos'
+    
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.String(10), nullable=False)
-    descricao = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(200), nullable=False)
     valor = db.Column(db.Float, nullable=False)
     categoria = db.Column(db.String(50), nullable=False)
-
-    # A "mágica" para ligar o Gasto ao Usuário.
-    # Por enquanto vamos deixar comentado para simplificar, mas é aqui que a mágica acontece.
-    # user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    data = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    # A Foreign Key aponta para a tabela 'user' e coluna 'id'
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "data": self.data,
-            "descricao": self.descricao,
-            "valor": self.valor,
-            "categoria": self.categoria
+            'id': self.id,
+            'descricao': self.descricao,
+            'valor': self.valor,
+            'categoria': self.categoria,
+            'data': self.data.isoformat(),
+            'user_id': self.user_id
         }

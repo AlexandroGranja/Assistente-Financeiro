@@ -42,9 +42,22 @@ def create_app():
     db.init_app(app)
 
     # --- CORREÇÃO AQUI ---
-    # Garante que as tabelas do banco de dados sejam criadas
+    # Garante que as tabelas do banco de dados sejam criadas com tratamento de erro
     with app.app_context():
-        db.create_all()
+        try:
+            # Tenta conectar e criar as tabelas
+            db.create_all()
+            print("✅ Banco de dados conectado e tabelas criadas com sucesso!")
+        except Exception as e:
+            print(f"❌ ERRO ao conectar com o banco de dados: {e}")
+            # Em produção, você pode decidir se quer continuar sem DB ou falhar
+            # Para debug, vamos imprimir mais informações
+            print(f"DATABASE_URL configurada: {bool(database_url)}")
+            if database_url:
+                # Remove senha para log seguro
+                safe_url = database_url.split('@')[1] if '@' in database_url else database_url
+                print(f"Tentando conectar em: ...@{safe_url}")
+            raise e  # Re-raise para falhar o deploy se DB não conectar
 
     # Regista os Blueprints (rotas da API)
     app.register_blueprint(user_bp, url_prefix='/api')

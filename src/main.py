@@ -41,23 +41,60 @@ def create_app():
     # Inicializa o banco de dados com o app
     db.init_app(app)
 
-    # --- CORREÇÃO AQUI ---
-    # Garante que as tabelas do banco de dados sejam criadas com tratamento de erro
+    # --- CONFIGURAÇÃO MELHORADA DO BANCO DE DADOS ---
+    # Configurações adicionais para melhorar a conexão com PostgreSQL
+    if database_url and 'postgresql://' in database_url:
+        # Configurações específicas para PostgreSQL no Railway
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'pool_pre_ping': True,  # Verifica conexões antes de usar
+            'pool_recycle': 300,    # Recicla conexões a cada 5 minutos
+            'connect_args': {
+                "connect_timeout": 30,  # Timeout de conexão de 30 segundos
+                "application_name": "assistente_financeiro_whatsapp"
+            }
+        }
+    
+    # Garante que as tabelas do banco de dados sejam criadas com tratamento de erro melhorado
     with app.app_context():
-        try:
-            # Tenta conectar e criar as tabelas
-            db.create_all()
-            print("✅ Banco de dados conectado e tabelas criadas com sucesso!")
-        except Exception as e:
-            print(f"❌ ERRO ao conectar com o banco de dados: {e}")
-            # Em produção, você pode decidir se quer continuar sem DB ou falhar
-            # Para debug, vamos imprimir mais informações
-            print(f"DATABASE_URL configurada: {bool(database_url)}")
-            if database_url:
-                # Remove senha para log seguro
-                safe_url = database_url.split('@')[1] if '@' in database_url else database_url
-                print(f"Tentando conectar em: ...@{safe_url}")
-            raise e  # Re-raise para falhar o deploy se DB não conectar
+        max_retries = 3
+        retry_delay = 5  # segundos
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"🔄 Tentativa {attempt + 1}/{max_retries} de conectar ao banco de dados...")
+                
+                # Testa a conexão primeiro
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("SELECT 1"))
+                    print("✅ Conexão com banco de dados estabelecida!")
+                
+                # Cria as tabelas
+                db.create_all()
+                print("✅ Tabelas do banco de dados criadas/verificadas com sucesso!")
+                break
+                
+            except Exception as e:
+                print(f"❌ ERRO na tentativa {attempt + 1}: {e}")
+                
+                # Informações de debug
+                print(f"DATABASE_URL configurada: {bool(database_url)}")
+                if database_url:
+                    # Remove senha para log seguro
+                    safe_url = database_url.split('@')[1] if '@' in database_url else database_url
+                    print(f"Tentando conectar em: ...@{safe_url}")
+                
+                # Se não é a última tentativa, aguarda antes de tentar novamente
+                if attempt < max_retries - 1:
+                    print(f"⏳ Aguardando {retry_delay} segundos antes da próxima tentativa...")
+                    import time
+                    time.sleep(retry_delay)
+                else:
+                    print("💥 Todas as tentativas falharam. Verificações necessárias:")
+                    print("1. ✅ PostgreSQL está provisionado no Railway?")
+                    print("2. ✅ DATABASE_URL está configurada nas variáveis de ambiente?")
+                    print("3. ✅ PostgreSQL está conectado ao serviço da aplicação?")
+                    print("4. ✅ PostgreSQL está rodando sem erros?")
+                    raise e  # Re-raise para falhar o deploy se DB não conectar
 
     # Regista os Blueprints (rotas da API)
     app.register_blueprint(user_bp, url_prefix='/api')

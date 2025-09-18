@@ -1,0 +1,571 @@
+{
+  "name": "Assistente Financeiro WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "id": "webhook-whatsapp",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.entry[0].changes[0].value.messages[0].type }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-message-type",
+      "name": "Verificar Tipo de Mensagem",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair dados da mensagem do WhatsApp\nconst webhookData = $input.all()[0].json.body;\n\nif (!webhookData.entry || !webhookData.entry[0].changes || !webhookData.entry[0].changes[0].value.messages) {\n  return [{ json: { error: 'Formato de webhook inválido' } }];\n}\n\nconst message = webhookData.entry[0].changes[0].value.messages[0];\nconst contact = webhookData.entry[0].changes[0].value.contacts[0];\n\nconst phoneNumber = message.from;\nconst messageText = message.text.body.trim();\nconst messageId = message.id;\nconst timestamp = message.timestamp;\n\n// Processar o texto da mensagem\nlet commandType = 'registro'; // padrão\nlet processedData = {\n  phone_number: phoneNumber,\n  message_text: messageText,\n  message_id: messageId,\n  timestamp: timestamp,\n  command_type: 'registro'\n};\n\n// Verificar se é um comando especial\nif (messageText.startsWith('#dia')) {\n  processedData.command_type = 'consulta_dia';\n} else if (messageText.startsWith('#mes')) {\n  processedData.command_type = 'consulta_mes';\n} else if (messageText.startsWith('#conselho')) {\n  processedData.command_type = 'conselho';\n} else if (messageText.toLowerCase().includes('ajuda') || messageText.toLowerCase().includes('help')) {\n  processedData.command_type = 'ajuda';\n} else {\n  // Tentar extrair dados do gasto\n  // Formato esperado: \"Descrição valor categoria\"\n  const parts = messageText.split(' ');\n  if (parts.length >= 3) {\n    // Última palavra é categoria\n    const categoria = parts[parts.length - 1];\n    // Penúltima é valor\n    const valor = parts[parts.length - 2];\n    // Resto é descrição\n    const descricao = parts.slice(0, -2).join(' ');\n    \n    processedData.descricao = descricao;\n    processedData.valor = valor;\n    processedData.categoria = categoria;\n    processedData.command_type = 'registro';\n  } else {\n    // Se não conseguir extrair, tratar como ajuda\n    processedData.command_type = 'ajuda';\n  }\n}\n\nreturn [{ json: processedData }];"
+      },
+      "id": "process-message",
+      "name": "Processar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "registro",
+              "leftValue": "={{ $json.command_type }}",
+              "rightValue": "registro",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "consulta_dia",
+              "leftValue": "={{ $json.command_type }}",
+              "rightValue": "consulta_dia",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "consulta_mes",
+              "leftValue": "={{ $json.command_type }}",
+              "rightValue": "consulta_mes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "conselho",
+              "leftValue": "={{ $json.command_type }}",
+              "rightValue": "conselho",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "ajuda",
+              "leftValue": "={{ $json.command_type }}",
+              "rightValue": "ajuda",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-command-type",
+      "name": "Verificar Tipo de Comando",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/registrar_gasto",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.phone_number }}"
+            },
+            {
+              "name": "descricao",
+              "value": "={{ $json.descricao }}"
+            },
+            {
+              "name": "valor",
+              "value": "={{ $json.valor }}"
+            },
+            {
+              "name": "categoria",
+              "value": "={{ $json.categoria }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "registrar-gasto",
+      "name": "Registrar Gasto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/consultar_gastos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.phone_number }}"
+            },
+            {
+              "name": "periodo",
+              "value": "={{ $json.command_type === 'consulta_dia' ? 'dia' : 'mes' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "consultar-gastos",
+      "name": "Consultar Gastos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/gerar_conselho",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.phone_number }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gerar-conselho",
+      "name": "Gerar Conselho",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/ajuda",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.phone_number }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "obter-ajuda",
+      "name": "Obter Ajuda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar resposta para WhatsApp\nconst inputData = $input.all()[0].json;\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nlet responseText = '';\n\n// Determinar a resposta baseada no resultado da API\nif (inputData.message) {\n  responseText = inputData.message;\n} else if (inputData.response) {\n  responseText = inputData.response;\n} else if (inputData.error) {\n  responseText = `❌ Erro: ${inputData.error}`;\n} else {\n  responseText = '❌ Desculpe, não consegui processar sua solicitação.';\n}\n\n// Preparar payload para WhatsApp Business API\nconst whatsappPayload = {\n  messaging_product: \"whatsapp\",\n  to: originalMessage.phone_number,\n  type: \"text\",\n  text: {\n    body: responseText\n  }\n};\n\nreturn [{ json: whatsappPayload }];"
+      },
+      "id": "prepare-whatsapp-response",
+      "name": "Preparar Resposta WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "send-whatsapp-message",
+      "name": "Enviar Mensagem WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log da resposta final\nconst response = $input.all()[0].json;\nconsole.log('Mensagem enviada com sucesso:', response);\n\nreturn [{ json: { status: 'success', response: response } }];"
+      },
+      "id": "log-response",
+      "name": "Log Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de erro\nconst error = $input.all()[0].json;\nconsole.error('Erro no fluxo:', error);\n\n// Tentar enviar mensagem de erro para o usuário\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nconst errorPayload = {\n  messaging_product: \"whatsapp\",\n  to: originalMessage.phone_number,\n  type: \"text\",\n  text: {\n    body: \"❌ Desculpe, ocorreu um erro interno. Tente novamente em alguns minutos.\"\n  }\n};\n\nreturn [{ json: errorPayload }];"
+      },
+      "id": "handle-error",
+      "name": "Tratar Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "send-error-message",
+      "name": "Enviar Mensagem de Erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verificar Tipo de Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Tipo de Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Processar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Verificar Tipo de Comando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Tipo de Comando": {
+      "main": [
+        [
+          {
+            "node": "Registrar Gasto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar Gastos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar Gastos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gerar Conselho",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Obter Ajuda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Gasto": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Tratar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Gastos": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Tratar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Conselho": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Tratar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obter Ajuda": {
+      "main": [
+        [
+          {
+            "node": "Preparar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Tratar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resposta WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensagem WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensagem WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tratar Erro": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensagem de Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-18T00:00:00.000Z",
+  "versionId": "1"
+}

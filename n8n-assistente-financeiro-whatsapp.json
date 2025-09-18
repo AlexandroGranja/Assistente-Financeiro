@@ -49,7 +49,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extrair dados da mensagem do WhatsApp\nconst webhookData = $input.all()[0].json.body;\n\nif (!webhookData.entry || !webhookData.entry[0].changes || !webhookData.entry[0].changes[0].value.messages) {\n  return [{ json: { error: 'Formato de webhook inválido' } }];\n}\n\nconst message = webhookData.entry[0].changes[0].value.messages[0];\nconst contact = webhookData.entry[0].changes[0].value.contacts[0];\n\nconst phoneNumber = message.from;\nconst messageText = message.text.body.trim();\nconst messageId = message.id;\nconst timestamp = message.timestamp;\n\n// Processar o texto da mensagem\nlet commandType = 'registro'; // padrão\nlet processedData = {\n  phone_number: phoneNumber,\n  message_text: messageText,\n  message_id: messageId,\n  timestamp: timestamp,\n  command_type: 'registro'\n};\n\n// Verificar se é um comando especial\nif (messageText.startsWith('#dia')) {\n  processedData.command_type = 'consulta_dia';\n} else if (messageText.startsWith('#mes')) {\n  processedData.command_type = 'consulta_mes';\n} else if (messageText.startsWith('#conselho')) {\n  processedData.command_type = 'conselho';\n} else if (messageText.toLowerCase().includes('ajuda') || messageText.toLowerCase().includes('help')) {\n  processedData.command_type = 'ajuda';\n} else {\n  // Tentar extrair dados do gasto\n  // Formato esperado: \"Descrição valor categoria\"\n  const parts = messageText.split(' ');\n  if (parts.length >= 3) {\n    // Última palavra é categoria\n    const categoria = parts[parts.length - 1];\n    // Penúltima é valor\n    const valor = parts[parts.length - 2];\n    // Resto é descrição\n    const descricao = parts.slice(0, -2).join(' ');\n    \n    processedData.descricao = descricao;\n    processedData.valor = valor;\n    processedData.categoria = categoria;\n    processedData.command_type = 'registro';\n  } else {\n    // Se não conseguir extrair, tratar como ajuda\n    processedData.command_type = 'ajuda';\n  }\n}\n\nreturn [{ json: processedData }];"
+        "jsCode": "// Extrair dados da mensagem do WhatsApp via Evolution API\nconst webhookData = $input.all()[0].json.body;\n\n// Verificar formato da Evolution API\nif (!webhookData.data || !webhookData.data.message) {\n  return [{ json: { error: 'Formato de webhook Evolution inválido' } }];\n}\n\nconst message = webhookData.data.message;\nconst messageInfo = webhookData.data;\n\nconst phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');\nconst messageText = message.message?.conversation || message.message?.extendedTextMessage?.text || '';\nconst messageId = message.key.id;\nconst timestamp = message.messageTimestamp;\n\n// Processar o texto da mensagem\nlet commandType = 'registro'; // padrão\nlet processedData = {\n  phone_number: phoneNumber,\n  message_text: messageText,\n  message_id: messageId,\n  timestamp: timestamp,\n  command_type: 'registro'\n};\n\n// Verificar se é um comando especial\nif (messageText.startsWith('#dia')) {\n  processedData.command_type = 'consulta_dia';\n} else if (messageText.startsWith('#mes')) {\n  processedData.command_type = 'consulta_mes';\n} else if (messageText.startsWith('#conselho')) {\n  processedData.command_type = 'conselho';\n} else if (messageText.toLowerCase().includes('ajuda') || messageText.toLowerCase().includes('help')) {\n  processedData.command_type = 'ajuda';\n} else {\n  // Tentar extrair dados do gasto\n  // Formato esperado: \"Descrição valor categoria\"\n  const parts = messageText.split(' ');\n  if (parts.length >= 3) {\n    // Última palavra é categoria\n    const categoria = parts[parts.length - 1];\n    // Penúltima é valor\n    const valor = parts[parts.length - 2];\n    // Resto é descrição\n    const descricao = parts.slice(0, -2).join(' ');\n    \n    processedData.descricao = descricao;\n    processedData.valor = valor;\n    processedData.categoria = categoria;\n    processedData.command_type = 'registro';\n  } else {\n    // Se não conseguir extrair, tratar como ajuda\n    processedData.command_type = 'ajuda';\n  }\n}\n\nreturn [{ json: processedData }];"
       },
       "id": "process-message",
       "name": "Processar Mensagem",
@@ -274,7 +274,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Preparar resposta para WhatsApp\nconst inputData = $input.all()[0].json;\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nlet responseText = '';\n\n// Determinar a resposta baseada no resultado da API\nif (inputData.message) {\n  responseText = inputData.message;\n} else if (inputData.response) {\n  responseText = inputData.response;\n} else if (inputData.error) {\n  responseText = `❌ Erro: ${inputData.error}`;\n} else {\n  responseText = '❌ Desculpe, não consegui processar sua solicitação.';\n}\n\n// Preparar payload para WhatsApp Business API\nconst whatsappPayload = {\n  messaging_product: \"whatsapp\",\n  to: originalMessage.phone_number,\n  type: \"text\",\n  text: {\n    body: responseText\n  }\n};\n\nreturn [{ json: whatsappPayload }];"
+        "jsCode": "// Preparar resposta para Evolution API\nconst inputData = $input.all()[0].json;\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nlet responseText = '';\n\n// Determinar a resposta baseada no resultado da API\nif (inputData.message) {\n  responseText = inputData.message;\n} else if (inputData.response) {\n  responseText = inputData.response;\n} else if (inputData.error) {\n  responseText = `❌ Erro: ${inputData.error}`;\n} else {\n  responseText = '❌ Desculpe, não consegui processar sua solicitação.';\n}\n\n// Preparar payload para Evolution API\nconst evolutionPayload = {\n  to: `whatsapp:${originalMessage.phone_number}`,\n  text: {\n    body: responseText\n  }\n};\n\nreturn [{ json: evolutionPayload }];"
       },
       "id": "prepare-whatsapp-response",
       "name": "Preparar Resposta WhatsApp",
@@ -287,13 +287,13 @@
     },
     {
       "parameters": {
-        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_ID }}/messages",
+        "url": "{{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE_NAME }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}"
+              "name": "apikey",
+              "value": "{{ $vars.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -303,7 +303,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
+        "jsonBody": "={{ JSON.stringify({number: $json.to.replace('whatsapp:', ''), text: $json.text.body}) }}",
         "options": {}
       },
       "id": "send-whatsapp-message",
@@ -330,7 +330,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Log de erro\nconst error = $input.all()[0].json;\nconsole.error('Erro no fluxo:', error);\n\n// Tentar enviar mensagem de erro para o usuário\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nconst errorPayload = {\n  messaging_product: \"whatsapp\",\n  to: originalMessage.phone_number,\n  type: \"text\",\n  text: {\n    body: \"❌ Desculpe, ocorreu um erro interno. Tente novamente em alguns minutos.\"\n  }\n};\n\nreturn [{ json: errorPayload }];"
+        "jsCode": "// Log de erro\nconst error = $input.all()[0].json;\nconsole.error('Erro no fluxo:', error);\n\n// Tentar enviar mensagem de erro para o usuário\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nconst errorPayload = {\n  to: `whatsapp:${originalMessage.phone_number}`,\n  text: {\n    body: \"❌ Desculpe, ocorreu um erro interno. Tente novamente em alguns minutos.\"\n  }\n};\n\nreturn [{ json: errorPayload }];"
       },
       "id": "handle-error",
       "name": "Tratar Erro",
@@ -343,13 +343,13 @@
     },
     {
       "parameters": {
-        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_ID }}/messages",
+        "url": "{{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE_NAME }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}"
+              "name": "apikey",
+              "value": "{{ $vars.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -359,7 +359,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
+        "jsonBody": "={{ JSON.stringify({number: $json.to.replace('whatsapp:', ''), text: $json.text.body}) }}",
         "options": {}
       },
       "id": "send-error-message",

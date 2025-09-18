@@ -1,0 +1,131 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "123456789",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15551234567",
+              "phone_number_id": "987654321"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "João Silva"
+                },
+                "wa_id": "5511999887766"
+              }
+            ],
+            "messages": [
+              {
+                "from": "5511999887766",
+                "id": "wamid.example123",
+                "timestamp": "1704067200",
+                "text": {
+                  "body": "Almoço 25.50 alimentação"
+                },
+                "type": "text"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
+
+// EXEMPLOS DE DIFERENTES TIPOS DE MENSAGEM:
+
+// 1. REGISTRO DE GASTO
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "contacts": [{"wa_id": "5511999887766"}],
+        "messages": [{
+          "from": "5511999887766",
+          "id": "msg001",
+          "timestamp": "1704067200",
+          "text": {"body": "Café da manhã 15.00 alimentação"},
+          "type": "text"
+        }]
+      }
+    }]
+  }]
+}
+
+// 2. CONSULTA DIÁRIA
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "contacts": [{"wa_id": "5511999887766"}],
+        "messages": [{
+          "from": "5511999887766",
+          "id": "msg002",
+          "timestamp": "1704067200",
+          "text": {"body": "#dia"},
+          "type": "text"
+        }]
+      }
+    }]
+  }]
+}
+
+// 3. CONSULTA MENSAL
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "contacts": [{"wa_id": "5511999887766"}],
+        "messages": [{
+          "from": "5511999887766",
+          "id": "msg003",
+          "timestamp": "1704067200",
+          "text": {"body": "#mes"},
+          "type": "text"
+        }]
+      }
+    }]
+  }]
+}
+
+// 4. CONSELHO FINANCEIRO
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "contacts": [{"wa_id": "5511999887766"}],
+        "messages": [{
+          "from": "5511999887766",
+          "id": "msg004",
+          "timestamp": "1704067200",
+          "text": {"body": "#conselho"},
+          "type": "text"
+        }]
+      }
+    }]
+  }]
+}
+
+// 5. AJUDA
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "contacts": [{"wa_id": "5511999887766"}],
+        "messages": [{
+          "from": "5511999887766",
+          "id": "msg005",
+          "timestamp": "1704067200",
+          "text": {"body": "ajuda"},
+          "type": "text"
+        }]
+      }
+    }]
+  }]
+}

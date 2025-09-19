@@ -1,5 +1,4 @@
 {
-  "name": "Assistente Financeiro WhatsApp",
   "nodes": [
     {
       "parameters": {
@@ -7,130 +6,173 @@
         "path": "whatsapp-webhook",
         "options": {}
       },
-      "id": "webhook-whatsapp",
+      "id": "e769ff5b-687f-41ae-87db-7061cf131816",
       "name": "WhatsApp Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        240,
-        300
-      ]
+        -960,
+        -48
+      ],
+      "webhookId": "26118c25-038d-4420-a660-22b70083f05e"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.body.entry[0].changes[0].value.messages[0].type }}",
-              "rightValue": "text",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "jsCode": "// =====================================================\n// PROCESSAMENTO INICIAL - EXTRAÇÃO E VALIDAÇÃO DE DADOS\n// =====================================================\n\nconst webhookData = $input.all()[0].json;\n\n// Verificar formato da Evolution API\nif (!webhookData.body || !webhookData.body.data || !webhookData.body.data.message) {\n  return [{ json: { \n    error: true, \n    error_type: 'webhook_invalid',\n    error_message: 'Formato de webhook Evolution inválido' \n  }}];\n}\n\nconst message = webhookData.body.data;\n\n// 🚫 FILTRO ANTI-LOOP: Ignorar mensagens do próprio bot\nif (message.key.fromMe === true) {\n  console.log('🤖 Mensagem ignorada: enviada pelo próprio bot');\n  return [{ json: { \n    ignored: true, \n    reason: 'Mensagem do próprio bot' \n  }}];\n}\n\n// Extrair dados básicos\nconst rawPhoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');\nconst rawMessageText = (message.message?.conversation || message.message?.extendedTextMessage?.text || '').trim();\nconst messageId = message.key.id;\nconst timestamp = message.messageTimestamp;\n\n// ✅ FUNÇÃO DE VALIDAÇÃO DE TELEFONE\nfunction validateAndFormatPhone(phone) {\n  const cleanPhone = phone.replace(/\\D/g, '');\n  \n  // Validar formato (10-13 dígitos)\n  if (cleanPhone.length < 10 || cleanPhone.length > 13) {\n    return {\n      valid: false,\n      formatted: phone,\n      error: 'Número deve ter entre 10 e 13 dígitos'\n    };\n  }\n  \n  // Formatar para padrão brasileiro\n  let formattedPhone = cleanPhone;\n  \n  // Se tem 13 dígitos e começa com 55, remover código do país\n  if (formattedPhone.length === 13 && formattedPhone.startsWith('55')) {\n    formattedPhone = formattedPhone.substring(2);\n  }\n  \n  // Se tem 10 dígitos, adicionar 9 no celular\n  if (formattedPhone.length === 10 && !formattedPhone.startsWith('11')) {\n    // Para celulares (não fixos), adicionar 9\n    if (['21', '11', '31', '41', '51', '61', '71', '81', '85'].includes(formattedPhone.substring(0, 2))) {\n      formattedPhone = formattedPhone.substring(0, 2) + '9' + formattedPhone.substring(2);\n    }\n  }\n  \n  return {\n    valid: true,\n    formatted: formattedPhone,\n    original: phone\n  };\n}\n\n// ✅ FUNÇÃO DE LIMPEZA DE MENSAGEM\nfunction cleanMessage(text) {\n  return text\n    .trim()\n    .replace(/\\s+/g, ' ') // Múltiplos espaços em um\n    .replace(/[\\n\\r]/g, ' ') // Quebras de linha em espaços\n    .substring(0, 500); // Limitar tamanho\n}\n\n// 📱 PROCESSAR TELEFONE\nconst phoneResult = validateAndFormatPhone(rawPhoneNumber);\n\n// 📝 PROCESSAR MENSAGEM\nconst cleanedMessage = cleanMessage(rawMessageText);\n\n// 📊 DADOS PROCESSADOS\nconst processedData = {\n  // Dados originais\n  raw_phone: rawPhoneNumber,\n  raw_message: rawMessageText,\n  message_id: messageId,\n  timestamp: timestamp,\n  \n  // Dados processados\n  phone_number: phoneResult.formatted,\n  phone_valid: phoneResult.valid,\n  phone_error: phoneResult.error || null,\n  \n  message_text: cleanedMessage,\n  message_valid: cleanedMessage.length > 0,\n  message_error: cleanedMessage.length === 0 ? 'Mensagem vazia' : null,\n  \n  // Status geral\n  processing_valid: phoneResult.valid && cleanedMessage.length > 0,\n  \n  // Dados Evolution\n  evolution_data: {\n    fromMe: message.key.fromMe,\n    remoteJid: message.key.remoteJid\n  }\n};\n\n// 📊 LOG DETALHADO\nconsole.log('📱 Dados processados:', {\n  phone: {\n    original: rawPhoneNumber,\n    formatted: phoneResult.formatted,\n    valid: phoneResult.valid,\n    error: phoneResult.error\n  },\n  message: {\n    original_length: rawMessageText.length,\n    cleaned_length: cleanedMessage.length,\n    valid: processedData.message_valid\n  },\n  overall_valid: processedData.processing_valid\n});\n\nreturn [{ json: processedData }];"
       },
-      "id": "check-message-type",
-      "name": "Verificar Tipo de Mensagem",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        460,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extrair dados da mensagem do WhatsApp via Evolution API\nconst webhookData = $input.all()[0].json.body;\n\n// Verificar formato da Evolution API\nif (!webhookData.data || !webhookData.data.message) {\n  return [{ json: { error: 'Formato de webhook Evolution inválido' } }];\n}\n\nconst message = webhookData.data.message;\nconst messageInfo = webhookData.data;\n\nconst phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');\nconst messageText = message.message?.conversation || message.message?.extendedTextMessage?.text || '';\nconst messageId = message.key.id;\nconst timestamp = message.messageTimestamp;\n\n// Processar o texto da mensagem\nlet commandType = 'registro'; // padrão\nlet processedData = {\n  phone_number: phoneNumber,\n  message_text: messageText,\n  message_id: messageId,\n  timestamp: timestamp,\n  command_type: 'registro'\n};\n\n// Verificar se é um comando especial\nif (messageText.startsWith('#dia')) {\n  processedData.command_type = 'consulta_dia';\n} else if (messageText.startsWith('#mes')) {\n  processedData.command_type = 'consulta_mes';\n} else if (messageText.startsWith('#conselho')) {\n  processedData.command_type = 'conselho';\n} else if (messageText.toLowerCase().includes('ajuda') || messageText.toLowerCase().includes('help')) {\n  processedData.command_type = 'ajuda';\n} else {\n  // Tentar extrair dados do gasto\n  // Formato esperado: \"Descrição valor categoria\"\n  const parts = messageText.split(' ');\n  if (parts.length >= 3) {\n    // Última palavra é categoria\n    const categoria = parts[parts.length - 1];\n    // Penúltima é valor\n    const valor = parts[parts.length - 2];\n    // Resto é descrição\n    const descricao = parts.slice(0, -2).join(' ');\n    \n    processedData.descricao = descricao;\n    processedData.valor = valor;\n    processedData.categoria = categoria;\n    processedData.command_type = 'registro';\n  } else {\n    // Se não conseguir extrair, tratar como ajuda\n    processedData.command_type = 'ajuda';\n  }\n}\n\nreturn [{ json: processedData }];"
-      },
-      "id": "process-message",
-      "name": "Processar Mensagem",
+      "id": "837af8fc-9521-4a81-ae2e-3ee5cbb2d17f",
+      "name": "🔧 Processar Dados",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        200
+        -720,
+        -48
       ]
     },
     {
       "parameters": {
-        "options": {},
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
+        "jsCode": "// =====================================================\n// CLASSIFICADOR INTELIGENTE DE MENSAGENS\n// =====================================================\n\nconst inputData = $input.all()[0].json;\n\n// Se dados inválidos, ir direto para ajuda\nif (!inputData.processing_valid) {\n  return [{ json: {\n    ...inputData,\n    command_type: 'ajuda',\n    classification_reason: inputData.phone_error || inputData.message_error || 'Dados inválidos'\n  }}];\n}\n\nconst messageText = inputData.message_text;\n\n// 🧠 FUNÇÕES DE DETECÇÃO\nfunction isNumeric(str) {\n  const patterns = [\n    /^\\d+$/, // 10\n    /^\\d+[.,]\\d+$/, // 10.50 ou 10,50\n    /^R\\$\\s*\\d+([.,]\\d+)?$/i, // R$ 10 ou R$ 10.50\n    /^\\$\\s*\\d+([.,]\\d+)?$/, // $10 ou $10.50\n    /^\\d+[.,]\\d{1,2}$/ // 10.5 ou 10.50\n  ];\n  return patterns.some(pattern => pattern.test(str.trim()));\n}\n\nfunction extractNumber(str) {\n  const cleaned = str.replace(/[R$\\s]/gi, '').replace(',', '.');\n  const num = parseFloat(cleaned);\n  return isNaN(num) ? 0 : num;\n}\n\nfunction detectExpenseFormat(text) {\n  const words = text.split(/\\s+/).filter(w => w.trim() !== '');\n  \n  if (words.length < 2) return null;\n  \n  // Procurar por números\n  const numberPositions = [];\n  words.forEach((word, index) => {\n    if (isNumeric(word)) {\n      numberPositions.push({ index, word, value: extractNumber(word) });\n    }\n  });\n  \n  if (numberPositions.length === 0 || numberPositions[0].value <= 0) return null;\n  \n  const valueInfo = numberPositions[0];\n  const valueIndex = valueInfo.index;\n  \n  let descricao = '';\n  let categoria = 'outros';\n  \n  // Extrair descrição baseada na posição do valor\n  if (valueIndex === 0) {\n    descricao = words.slice(1).join(' ');\n  } else if (valueIndex === words.length - 1) {\n    descricao = words.slice(0, -1).join(' ');\n  } else if (valueIndex === words.length - 2 && words.length >= 3) {\n    descricao = words.slice(0, -2).join(' ');\n    categoria = words[words.length - 1];\n  } else {\n    const beforeValue = words.slice(0, valueIndex).join(' ');\n    const afterValue = words.slice(valueIndex + 1).join(' ');\n    descricao = `${beforeValue} ${afterValue}`.trim();\n  }\n  \n  // Limpeza da descrição\n  descricao = descricao\n    .replace(/\\b(por|de|do|da|no|na|em|com|para|reais?|real|dinheiro|grana)\\b/gi, '')\n    .trim();\n  \n  if (descricao === '') descricao = 'Gasto';\n  \n  // Categorização automática\n  const categorias = {\n    alimentacao: ['café', 'almoço', 'jantar', 'comida', 'lanche', 'pizza', 'hambúrguer', 'restaurante', 'padaria', 'mercado', 'supermercado', 'ifood'],\n    transporte: ['uber', 'taxi', 'ônibus', 'metro', 'gasolina', 'combustível', 'passagem', 'viagem', '99'],\n    saude: ['remédio', 'farmácia', 'médico', 'consulta', 'exame', 'hospital', 'dentista'],\n    lazer: ['cinema', 'teatro', 'show', 'festa', 'bar', 'balada', 'jogo', 'diversão'],\n    casa: ['luz', 'água', 'internet', 'aluguel', 'condomínio', 'gás', 'limpeza'],\n    roupas: ['roupa', 'camisa', 'calça', 'sapato', 'tênis', 'vestido', 'blusa'],\n    educacao: ['curso', 'livro', 'escola', 'faculdade', 'material', 'aula'],\n    trabalho: ['material', 'escritório', 'equipamento', 'ferramenta'],\n    outros: ['presente', 'gift', 'compra', 'item']\n  };\n  \n  if (categoria === 'outros') {\n    const textLower = `${descricao} ${text}`.toLowerCase();\n    for (const [cat, keywords] of Object.entries(categorias)) {\n      if (keywords.some(keyword => textLower.includes(keyword))) {\n        categoria = cat;\n        break;\n      }\n    }\n  }\n  \n  return {\n    descricao: descricao.charAt(0).toUpperCase() + descricao.slice(1),\n    valor: valueInfo.value,\n    categoria: categoria.toLowerCase()\n  };\n}\n\n// 🎯 CLASSIFICAÇÃO PRINCIPAL\nlet result = { ...inputData };\nconst lower = messageText.toLowerCase().trim();\n\n// 1. Verificar comandos específicos\nif (lower.startsWith('#') || lower.includes('help') || lower.includes('ajuda')) {\n  if (lower.includes('dia') || lower.startsWith('#dia')) {\n    result.command_type = 'consulta_dia';\n  } else if (lower.includes('mês') || lower.includes('mes') || lower.startsWith('#mes') || lower.startsWith('#mês')) {\n    result.command_type = 'consulta_mes';\n  } else if (lower.includes('conselho') || lower.startsWith('#conselho')) {\n    result.command_type = 'conselho';\n  } else {\n    result.command_type = 'ajuda';\n  }\n  result.classification_reason = 'Comando detectado';\n} else {\n  // 2. Tentar identificar como gasto\n  const expenseData = detectExpenseFormat(messageText);\n  \n  if (expenseData) {\n    result.command_type = 'registro';\n    result.descricao = expenseData.descricao;\n    result.valor = expenseData.valor.toString();\n    result.categoria = expenseData.categoria;\n    result.valor_valid = true;\n    result.classification_reason = 'Gasto identificado';\n  } else {\n    // 3. Não conseguiu identificar - ir para ajuda\n    result.command_type = 'ajuda';\n    result.classification_reason = 'Formato não reconhecido';\n  }\n}\n\n// 📊 LOG DA CLASSIFICAÇÃO\nconsole.log('🎯 Mensagem classificada:', {\n  message: messageText,\n  command_type: result.command_type,\n  reason: result.classification_reason,\n  expense_data: result.command_type === 'registro' ? {\n    descricao: result.descricao,\n    valor: result.valor,\n    categoria: result.categoria\n  } : null\n});\n\nreturn [{ json: result }];"
+      },
+      "id": "a11a877b-d9fa-4441-9568-032257ff7c81",
+      "name": "🎯 Classificar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
             {
-              "id": "registro",
-              "leftValue": "={{ $json.command_type }}",
-              "rightValue": "registro",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command_type }}",
+                    "rightValue": "registro",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "365cd91f-d702-4ca8-b887-615a82c83de2"
+                  }
+                ],
+                "combinator": "and"
               }
             },
             {
-              "id": "consulta_dia",
-              "leftValue": "={{ $json.command_type }}",
-              "rightValue": "consulta_dia",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3eca84f9-7b1a-4631-afa1-318905f6f964",
+                    "leftValue": "={{ $json.command_type }}",
+                    "rightValue": "consulta_dia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
               }
             },
             {
-              "id": "consulta_mes",
-              "leftValue": "={{ $json.command_type }}",
-              "rightValue": "consulta_mes",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0bfe6eab-a93a-4b69-84c8-7114d8ae6444",
+                    "leftValue": "={{ $json.command_type }}",
+                    "rightValue": "consulta_mes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
               }
             },
             {
-              "id": "conselho",
-              "leftValue": "={{ $json.command_type }}",
-              "rightValue": "conselho",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "70a7baae-ca82-4a2c-ad5b-e2fdb504973e",
+                    "leftValue": "={{ $json.command_type }}",
+                    "rightValue": "conselho",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
               }
             },
             {
-              "id": "ajuda",
-              "leftValue": "={{ $json.command_type }}",
-              "rightValue": "ajuda",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1c16b721-f457-4c36-a466-f24b8b5499a7",
+                    "leftValue": "={{ $json.command_type }}",
+                    "rightValue": "ajuda",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
               }
             }
-          ],
-          "combinator": "and"
-        }
+          ]
+        },
+        "options": {}
       },
-      "id": "check-command-type",
-      "name": "Verificar Tipo de Comando",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
+      "typeVersion": 3.2,
       "position": [
-        900,
-        200
-      ]
+        848,
+        -96
+      ],
+      "id": "3db67420-4856-4734-8d56-0dd523cf1bb0",
+      "name": "🔀 Switch"
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/registrar_gasto",
+        "method": "POST",
+        "url": "=https://assistente-financeiro-production.up.railway.app/api/financeiro/registrar_gasto",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -153,7 +195,7 @@
             },
             {
               "name": "valor",
-              "value": "={{ $json.valor }}"
+              "value": "={{ parseFloat($json.valor) }}"
             },
             {
               "name": "categoria",
@@ -163,18 +205,19 @@
         },
         "options": {}
       },
-      "id": "registrar-gasto",
-      "name": "Registrar Gasto",
+      "id": "6a73aad3-52e8-420c-b6d3-5ba78c96ff0f",
+      "name": "📝 Registrar Gasto",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
-        80
+        1248,
+        -272
       ]
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/consultar_gastos",
+        "method": "POST",
+        "url": "=https://assistente-financeiro-production.up.railway.app/api/financeiro/consultar_gastos",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -199,18 +242,19 @@
         },
         "options": {}
       },
-      "id": "consultar-gastos",
-      "name": "Consultar Gastos",
+      "id": "924ee909-26d0-47cb-bdbd-eab3c587dd97",
+      "name": "📊 Consultar Gastos",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
-        200
+        1248,
+        -96
       ]
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/gerar_conselho",
+        "method": "POST",
+        "url": "=https://assistente-financeiro-production.up.railway.app/api/financeiro/gerar_conselho",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -231,18 +275,19 @@
         },
         "options": {}
       },
-      "id": "gerar-conselho",
-      "name": "Gerar Conselho",
+      "id": "5715c166-38ff-4c58-8211-3440fa8d7dbc",
+      "name": "💡 Gerar Conselho",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
-        320
+        1248,
+        80
       ]
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/financeiro/ajuda",
+        "method": "POST",
+        "url": "=https://assistente-financeiro-production.up.railway.app/api/financeiro/ajuda",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -263,113 +308,191 @@
         },
         "options": {}
       },
-      "id": "obter-ajuda",
-      "name": "Obter Ajuda",
+      "id": "05d9924b-9e96-41e1-821a-127e2707313b",
+      "name": "❓ Obter Ajuda",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
-        440
+        1248,
+        240
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Preparar resposta para Evolution API\nconst inputData = $input.all()[0].json;\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nlet responseText = '';\n\n// Determinar a resposta baseada no resultado da API\nif (inputData.message) {\n  responseText = inputData.message;\n} else if (inputData.response) {\n  responseText = inputData.response;\n} else if (inputData.error) {\n  responseText = `❌ Erro: ${inputData.error}`;\n} else {\n  responseText = '❌ Desculpe, não consegui processar sua solicitação.';\n}\n\n// Preparar payload para Evolution API\nconst evolutionPayload = {\n  to: `whatsapp:${originalMessage.phone_number}`,\n  text: {\n    body: responseText\n  }\n};\n\nreturn [{ json: evolutionPayload }];"
+        "jsCode": "// =====================================================\n// TRATAMENTO DE ERROS E PREPARAÇÃO DE MENSAGENS\n// =====================================================\n\nconst apiResponse = $input.all()[0].json;\nconst originalData = $('🎯 Classificar Mensagem').all()[0].json;\n\nlet responseData = {\n  phone_number: originalData.phone_number,\n  message_id: originalData.message_id,\n  timestamp: originalData.timestamp,\n  command_type: originalData.command_type,\n  success: false,\n  error: false,\n  message: '',\n  status_code: null\n};\n\n// 🔍 DETECTAR TIPO DE RESPOSTA\nif (apiResponse.error) {\n  // Erro explícito\n  responseData.error = true;\n  responseData.message = `❌ *Erro:* ${apiResponse.error}`;\n  responseData.status_code = apiResponse.statusCode || 500;\n} else if (apiResponse.statusCode && apiResponse.statusCode >= 400) {\n  // Erro por status code\n  responseData.error = true;\n  responseData.message = `❌ *Erro ${apiResponse.statusCode}:* ${apiResponse.message || 'Erro interno do servidor'}`;\n  responseData.status_code = apiResponse.statusCode;\n} else if (apiResponse.message) {\n  // Sucesso com mensagem\n  responseData.success = true;\n  responseData.message = apiResponse.message;\n  responseData.status_code = apiResponse.statusCode || 200;\n} else if (apiResponse.response) {\n  // Sucesso com response\n  responseData.success = true;\n  responseData.message = apiResponse.response;\n  responseData.status_code = apiResponse.statusCode || 200;\n} else {\n  // Resposta inesperada\n  responseData.error = true;\n  responseData.message = '❌ *Erro:* Resposta inesperada do servidor';\n  responseData.status_code = 500;\n}\n\n// ✅ MENSAGENS DE SUCESSO PADRONIZADAS\nif (responseData.success) {\n  switch (originalData.command_type) {\n    case 'registro':\n      responseData.message = `✅ *Gasto registrado com sucesso!*\\n\\n💰 **${originalData.descricao}**\\n💵 R$ ${parseFloat(originalData.valor).toFixed(2)}\\n🏷️ Categoria: ${originalData.categoria}\\n\\n${responseData.message}`;\n      break;\n    case 'consulta_dia':\n    case 'consulta_mes':\n      responseData.message = `📊 *Consulta realizada:*\\n\\n${responseData.message}`;\n      break;\n    case 'conselho':\n      responseData.message = `💡 *Conselho financeiro:*\\n\\n${responseData.message}`;\n      break;\n    case 'ajuda':\n      responseData.message = `❓ *Como usar o assistente:*\\n\\n${responseData.message}`;\n      break;\n  }\n}\n\n// 🚨 MENSAGENS DE ERRO PADRONIZADAS\nif (responseData.error) {\n  // Adicionar informações contextuais ao erro\n  const contextInfo = originalData.classification_reason ? `\\n\\n🔍 *Contexto:* ${originalData.classification_reason}` : '';\n  \n  switch (originalData.command_type) {\n    case 'registro':\n      responseData.message += `\\n\\n💡 *Exemplo correto:* \"Café 5.50\" ou \"15 almoço alimentação\"`;\n      break;\n    case 'consulta_dia':\n    case 'consulta_mes':\n      responseData.message += `\\n\\n💡 *Tente:* \"#dia\" para gastos de hoje ou \"#mês\" para o mês atual`;\n      break;\n  }\n  \n  responseData.message += contextInfo;\n}\n\n// 📱 PREPARAR PAYLOAD PARA EVOLUTION API\nconst evolutionPayload = {\n  to: `whatsapp:${responseData.phone_number}`,\n  text: {\n    body: responseData.message\n  },\n  // Metadados para logs\n  metadata: {\n    command_type: responseData.command_type,\n    success: responseData.success,\n    error: responseData.error,\n    status_code: responseData.status_code,\n    message_id: responseData.message_id\n  }\n};\n\n// 📊 LOG DETALHADO\nconsole.log('📤 Resposta preparada:', {\n  phone: responseData.phone_number,\n  command: responseData.command_type,\n  success: responseData.success,\n  error: responseData.error,\n  status: responseData.status_code,\n  message_length: responseData.message.length\n});\n\nreturn [{ json: evolutionPayload }];"
       },
-      "id": "prepare-whatsapp-response",
-      "name": "Preparar Resposta WhatsApp",
+      "id": "04df9a20-7b44-4ccb-9ce1-c1791c4ec436",
+      "name": "⚡ Processar Resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1340,
-        200
+        1696,
+        -16
       ]
     },
     {
       "parameters": {
-        "url": "{{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE_NAME }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "resource": "messages-api",
+        "instanceName": "granja",
+        "remoteJid": "={{ $('🎯 Classificar Mensagem').item.json.raw_phone }}",
+        "messageText": "={{ $json.text.body }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        -16
+      ],
+      "id": "c5b93bb6-773f-459b-a8f2-a61b897d2c21",
+      "name": "📱 Enviar WhatsApp",
+      "credentials": {
+        "evolutionApi": {
+          "id": "4qMY5KqDTKn0P9oh",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// LOG FINAL DE SUCESSO\n// =====================================================\n\nconst response = $input.all()[0].json;\nconst metadata = $('⚡ Processar Resposta').all()[0].json.metadata;\n\nconst logData = {\n  status: 'SUCCESS',\n  timestamp: new Date().toISOString(),\n  phone: metadata.message_id,\n  command: metadata.command_type,\n  response_sent: true,\n  evolution_response: response\n};\n\nconsole.log('✅ Fluxo concluído com sucesso:', logData);\n\nreturn [{ json: {\n  status: 'success',\n  message: 'Mensagem enviada com sucesso',\n  data: logData\n}}];"
+      },
+      "id": "0eae7943-5423-411c-9a9e-a4437e634ac7",
+      "name": "✅ Log Sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "197rYdgxwRdxftx3CQsBEsvKtBkgHa26cRtQ7lub97Zw",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -528,
+        -48
+      ],
+      "id": "cf6cc084-9908-4bac-b414-7fd019e70b19",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "23ScciS3fu3IX79v",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// VERIFICAÇÃO DE AUTORIZAÇÃO (FLUXO LINEAR)\n// =====================================================\n\n// Pega os dados do nó \"Processar Dados\" usando referência\nconst processNodeItems = $items(\"🔧 Processar Dados\");\nif (!processNodeItems.length) {\n    throw new Error(\"Erro: Não encontrei os dados do nó '🔧 Processar Dados'.\");\n}\nconst inputData = processNodeItems[0].json;\n\n// Pega os dados do nó anterior (que agora é o Download file)\nconst driveData = $input.all()[0];\n\n// Se o download da planilha falhou\nif (!driveData.binary || !driveData.binary.data) {\n  return [{ json: { ...inputData, authorized: false, auth_error: 'Falha ao ler a planilha de autorização.' }}];\n}\n\n// Converte o arquivo CSV para texto\nconst csvContent = Buffer.from(driveData.binary.data.data, 'base64').toString('utf8');\nconst lines = csvContent.split('\\n').map(line => line.trim()).filter(Boolean);\nconst authorizedNumbers = new Set();\n\n// Lê cada linha da planilha\nlines.forEach((line) => {\n  const phoneFromSheet = line.split(',')[0].replace(/\\D/g, '');\n  if (phoneFromSheet.length >= 10) {\n    let normalizedPhone = phoneFromSheet.startsWith('55') ? phoneFromSheet.substring(2) : phoneFromSheet;\n    authorizedNumbers.add(normalizedPhone);\n  }\n});\n\n// Verifica se o número do usuário está na lista\nconst userPhone = inputData.phone_number;\nconst isAuthorized = authorizedNumbers.has(userPhone);\n\n// Retorna o resultado\nreturn [{ json: {\n  ...inputData,\n  authorized: isAuthorized,\n  auth_error: isAuthorized ? null : 'Número não autorizado.'\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -48
+      ],
+      "id": "17572541-be53-46b7-a528-44c99d658534",
+      "name": "Autorização"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
             {
-              "name": "apikey",
-              "value": "{{ $vars.EVOLUTION_API_KEY }}"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.authorized }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "25121a66-eca6-4a06-be9a-a769dcf61b2f"
+                  }
+                ],
+                "combinator": "and"
+              }
             },
             {
-              "name": "Content-Type",
-              "value": "application/json"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6bba2667-519a-478d-85ca-548bd32db3dd",
+                    "leftValue": "={{ $json.authorized }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({number: $json.to.replace('whatsapp:', ''), text: $json.text.body}) }}",
         "options": {}
       },
-      "id": "send-whatsapp-message",
-      "name": "Enviar Mensagem WhatsApp",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
       "position": [
-        1560,
-        200
-      ]
+        48,
+        -48
+      ],
+      "id": "0b8dba71-7710-484a-8761-9ae450930e7a",
+      "name": "Switch Autorização."
     },
     {
       "parameters": {
-        "jsCode": "// Log da resposta final\nconst response = $input.all()[0].json;\nconsole.log('Mensagem enviada com sucesso:', response);\n\nreturn [{ json: { status: 'success', response: response } }];"
+        "resource": "messages-api",
+        "instanceName": "granja",
+        "remoteJid": "={{ $json.raw_phone }}",
+        "messageText": "🚫 Acesso Negado Olá! Parece que seu número ainda não tem permissão para usar o Assistente Financeiro. Para solicitar seu acesso, por favor, entre em contato com o gestor responsável.",
+        "options_message": {}
       },
-      "id": "log-response",
-      "name": "Log Resposta",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
       "position": [
-        1780,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Log de erro\nconst error = $input.all()[0].json;\nconsole.error('Erro no fluxo:', error);\n\n// Tentar enviar mensagem de erro para o usuário\nconst originalMessage = $('Processar Mensagem').all()[0].json;\n\nconst errorPayload = {\n  to: `whatsapp:${originalMessage.phone_number}`,\n  text: {\n    body: \"❌ Desculpe, ocorreu um erro interno. Tente novamente em alguns minutos.\"\n  }\n};\n\nreturn [{ json: errorPayload }];"
-      },
-      "id": "handle-error",
-      "name": "Tratar Erro",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1340,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "url": "{{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE_NAME }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "{{ $vars.EVOLUTION_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({number: $json.to.replace('whatsapp:', ''), text: $json.text.body}) }}",
-        "options": {}
-      },
-      "id": "send-error-message",
-      "name": "Enviar Mensagem de Erro",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1560,
-        400
-      ]
+        272,
+        112
+      ],
+      "id": "c1b5b68b-9a19-449e-bf26-c2f14dbead11",
+      "name": "Enviar texto",
+      "credentials": {
+        "evolutionApi": {
+          "id": "4qMY5KqDTKn0P9oh",
+          "name": "Evolution account"
+        }
+      }
     }
   ],
   "connections": {
@@ -377,181 +500,174 @@
       "main": [
         [
           {
-            "node": "Verificar Tipo de Mensagem",
+            "node": "🔧 Processar Dados",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verificar Tipo de Mensagem": {
+    "🔧 Processar Dados": {
       "main": [
         [
           {
-            "node": "Processar Mensagem",
+            "node": "Download file",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Processar Mensagem": {
+    "🎯 Classificar Mensagem": {
       "main": [
         [
           {
-            "node": "Verificar Tipo de Comando",
+            "node": "🔀 Switch",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verificar Tipo de Comando": {
+    "🔀 Switch": {
       "main": [
         [
           {
-            "node": "Registrar Gasto",
+            "node": "📝 Registrar Gasto",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Consultar Gastos",
+            "node": "📊 Consultar Gastos",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Consultar Gastos",
+            "node": "📊 Consultar Gastos",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Gerar Conselho",
+            "node": "💡 Gerar Conselho",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Obter Ajuda",
+            "node": "❓ Obter Ajuda",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Registrar Gasto": {
+    "📝 Registrar Gasto": {
       "main": [
         [
           {
-            "node": "Preparar Resposta WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "error": [
-        [
-          {
-            "node": "Tratar Erro",
+            "node": "⚡ Processar Resposta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Consultar Gastos": {
+    "📊 Consultar Gastos": {
       "main": [
         [
           {
-            "node": "Preparar Resposta WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "error": [
-        [
-          {
-            "node": "Tratar Erro",
+            "node": "⚡ Processar Resposta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gerar Conselho": {
+    "💡 Gerar Conselho": {
       "main": [
         [
           {
-            "node": "Preparar Resposta WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "error": [
-        [
-          {
-            "node": "Tratar Erro",
+            "node": "⚡ Processar Resposta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Obter Ajuda": {
+    "❓ Obter Ajuda": {
       "main": [
         [
           {
-            "node": "Preparar Resposta WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "error": [
-        [
-          {
-            "node": "Tratar Erro",
+            "node": "⚡ Processar Resposta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar Resposta WhatsApp": {
+    "⚡ Processar Resposta": {
       "main": [
         [
           {
-            "node": "Enviar Mensagem WhatsApp",
+            "node": "📱 Enviar WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Enviar Mensagem WhatsApp": {
+    "📱 Enviar WhatsApp": {
       "main": [
         [
           {
-            "node": "Log Resposta",
+            "node": "✅ Log Sucesso",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Tratar Erro": {
+    "Download file": {
       "main": [
         [
           {
-            "node": "Enviar Mensagem de Erro",
+            "node": "Autorização",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autorização": {
+      "main": [
+        [
+          {
+            "node": "Switch Autorização.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Autorização.": {
+      "main": [
+        [
+          {
+            "node": "🎯 Classificar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar texto",
             "type": "main",
             "index": 0
           }
@@ -559,13 +675,73 @@
       ]
     }
   },
-  "pinData": {},
-  "settings": {
-    "executionOrder": "v1"
+  "pinData": {
+    "WhatsApp Webhook": [
+      {
+        "headers": {
+          "host": "alexandro-granja.up.railway.app",
+          "user-agent": "axios/1.7.9",
+          "content-length": "942",
+          "accept-encoding": "gzip, compress, deflate, br",
+          "content-type": "application/json",
+          "x-forwarded-for": "162.220.234.63",
+          "x-forwarded-host": "alexandro-granja.up.railway.app",
+          "x-forwarded-proto": "https",
+          "x-railway-edge": "railway/us-east4-eqdc4a",
+          "x-railway-request-id": "LgfWxgguTTae97L7Aax-fw",
+          "x-real-ip": "162.220.234.63",
+          "x-request-start": "1758227994866"
+        },
+        "params": {},
+        "query": {},
+        "body": {
+          "event": "messages.upsert",
+          "instance": "granja",
+          "data": {
+            "key": {
+              "remoteJid": "5521974718844@s.whatsapp.net",
+              "fromMe": false,
+              "id": "3FDA46A82B8A5E24261C"
+            },
+            "pushName": "Alexandro",
+            "status": "DELIVERY_ACK",
+            "message": {
+              "messageContextInfo": {
+                "deviceListMetadata": {
+                  "senderKeyHash": "zy+Lhe6/YduC/w==",
+                  "senderTimestamp": "1758150978",
+                  "recipientKeyHash": "3R0lLClPGzVApQ==",
+                  "recipientTimestamp": "1758225214"
+                },
+                "deviceListMetadataVersion": 2
+              },
+              "conversation": "cigarro 13.50"
+            },
+            "contextInfo": {
+              "expiration": 0,
+              "ephemeralSettingTimestamp": "0",
+              "disappearingMode": {
+                "initiator": "CHANGED_IN_CHAT"
+              }
+            },
+            "messageType": "conversation",
+            "messageTimestamp": 1758227994,
+            "instanceId": "e1a661d6-e90a-4702-898f-eea76a32a0de",
+            "source": "unknown"
+          },
+          "destination": "https://alexandro-granja.up.railway.app/webhook/whatsapp-webhook",
+          "date_time": "2025-09-18T17:39:54.830Z",
+          "sender": "5521969585179@s.whatsapp.net",
+          "server_url": "http://localhost:8080",
+          "apikey": "577BED2CCF85-494C-9BE3-E4E20502A6DF"
+        },
+        "webhookUrl": "https://alexandro-granja.up.railway.app/webhook/whatsapp-webhook",
+        "executionMode": "production"
+      }
+    ]
   },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 1,
-  "updatedAt": "2025-01-18T00:00:00.000Z",
-  "versionId": "1"
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "96e5adee1f6ebf22aae881e1fbc9952651dd1c399d73ff41f80c57b54cc2cbaa"
+  }
 }

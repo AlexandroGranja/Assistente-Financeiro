@@ -86,6 +86,87 @@ PORT=8080
    EVOLUTION_INSTANCE_NAME=assistente-financeiro
    ```
 
+
+## 🔒 Verificação de Autorização de Usuários
+
+Para garantir a segurança e o controle de acesso ao Assistente Financeiro, foi implementado um sistema de verificação de usuários via Google Drive. Apenas números de telefone previamente cadastrados em uma planilha específica terão permissão para utilizar as funcionalidades do bot.
+
+### Como Funciona a Autorização
+
+1.  **Início do Fluxo:** Após o `WhatsApp Webhook` receber uma mensagem e o nó `Processar Dados` extrair as informações básicas do usuário (incluindo o número de telefone).
+2.  **Download da Planilha:** O nó `Download file` (Google Drive) é acionado para baixar uma planilha de autorização, convertendo-a para o formato CSV.
+3.  **Verificação de Acesso:** Um nó de código (`Autorização`) compara o número de telefone do usuário com a lista de números presentes na planilha. O código normaliza os números para garantir uma correspondência precisa.
+4.  **Roteamento do Fluxo:** Um nó `Switch Autorização` direciona o fluxo:
+    *   **Usuário Autorizado:** Se o número for encontrado na planilha, o fluxo prossegue para a `Classificação da Mensagem` e o processamento normal dos comandos.
+    *   **Usuário Não Autorizado:** Se o número não for encontrado, o fluxo é desviado para uma mensagem de "Acesso Negado", informando o usuário sobre a restrição e como solicitar acesso.
+
+### Configuração da Planilha de Autorização
+
+Crie uma planilha no Google Sheets com os números de telefone autorizados na **primeira coluna (Coluna A)**. Não é obrigatório ter um cabeçalho. Exemplo:
+
+| Coluna A |
+|----------|
+| 5521999998888 |
+| 11988887777 |
+| 5531977776666 |
+| ... |
+
+**Importante:** Certifique-se de que a planilha esteja compartilhada com a conta Google configurada nas credenciais do n8n, com permissão de leitura.
+
+### Diagrama do Fluxo n8n com Autorização
+
+O diagrama abaixo ilustra o fluxo completo do n8n, incluindo a etapa de verificação de autorização:
+
+![Fluxo n8n com Verificação de Autorização](https://private-us-east-1.manuscdn.com/sessionFile/LG8TOXnouA4FrIy7jGj9gb/sandbox/L9BJ20CjsxH0BaErHpUerv-images_1758299911435_na1fn_L2hvbWUvdWJ1bnR1L0Fzc2lzdGVudGUtRmluYW5jZWlyby9kb2NzL244bl9mbG93X2F1dGhvcml6YXRpb24.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvTEc4VE9Ybm91QTRGckl5N2pHajlnYi9zYW5kYm94L0w5QkoyMENqc3hIMEJhRXJIcFVlcnYtaW1hZ2VzXzE3NTgyOTk5MTE0MzVfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwwRnpjMmx6ZEdWdWRHVXRSbWx1WVc1alpXbHlieTlrYjJOekwyNDRibDltYkc5M1gyRjFkR2h2Y21sNllYUnBiMjQucG5nIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=J~LCEPATviQO775KzkORQHP49O6vjZuZryLW8nIvnoFlYXwF6z9fwCVpboVGOHIJlw~Oug4IOieXF4YPgGK1pfKE8Cu7ta~HCsNIWZr4Jom3IaAQz0PuDit3nLbIzgz7263d0tGxloT8bQJyW0tdd68R5WXlJFmGR3urAVoKSDvcN5c-iYvjK2Gurgt7iZBQlADf7j0rrc5AjghWjDo5frP8n-0vG19BRnqglM-cVZj06s4YEtKN3FeN45XP4WBKvJzyMdMKSMbvdwUgCtFtSnTW1K7GnKKiR3nb2apx6MlUp3Slhv5XJygDCo-76NwPYzIU9fxRcNS42y9rJ28B8w__)
+
+### Código do Nó `Autorização`
+
+```javascript
+// =====================================================
+// VERIFICAÇÃO DE AUTORIZAÇÃO (FLUXO LINEAR)
+// =====================================================
+
+// Pega os dados do nó "Processar Dados" usando referência
+const processNodeItems = $items("🔧 Processar Dados");
+if (!processNodeItems.length) {
+    throw new Error("Erro: Não encontrei os dados do nó \'🔧 Processar Dados\'.");
+}
+const inputData = processNodeItems[0].json;
+
+// Pega os dados do nó anterior (que agora é o Download file)
+const driveData = $input.all()[0];
+
+// Se o download da planilha falhou
+if (!driveData.binary || !driveData.binary.data) {
+  return [{ json: { ...inputData, authorized: false, auth_error: \'Falha ao ler a planilha de autorização.\' }}];
+}
+
+// Converte o arquivo CSV para texto
+const csvContent = Buffer.from(driveData.binary.data.data, \'base64\').toString(\'utf8\');
+const lines = csvContent.split(\'\\n\').map(line => line.trim()).filter(Boolean);
+const authorizedNumbers = new Set();
+
+// Lê cada linha da planilha
+lines.forEach((line) => {
+  const phoneFromSheet = line.split(\,\')[0].replace(/\\D/g, \'\');
+  if (phoneFromSheet.length >= 10) {
+    let normalizedPhone = phoneFromSheet.startsWith(\'55\') ? phoneFromSheet.substring(2) : phoneFromSheet;
+    authorizedNumbers.add(normalizedPhone);
+  }
+});
+
+// Verifica se o número do usuário está na lista
+const userPhone = inputData.phone_number;
+const isAuthorized = authorizedNumbers.has(userPhone);
+
+// Retorna o resultado
+return [{ json: {
+  ...inputData,
+  authorized: isAuthorized,
+  auth_error: isAuthorized ? null : \'Número não autorizado.\'
+}}];
+```
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -225,25 +306,7 @@ git push
 2. Confirme quota da API Gemini
 3. Verifique logs do backend
 
-## 🔄 Fluxo Completo
 
-```mermaid
-graph TD
-    A[Usuário WhatsApp] --> B[Evolution API]
-    B --> C[n8n Webhook]
-    C --> D[Processar Mensagem Evolution]
-    D --> E{Tipo Comando?}
-    E -->|Registro| F[API Registrar Flask]
-    E -->|Consulta| G[API Consultar Flask]
-    E -->|Conselho| H[API Conselho Flask]
-    E -->|Ajuda| I[API Ajuda Flask]
-    F --> J[Preparar Resposta Evolution]
-    G --> J
-    H --> J
-    I --> J
-    J --> K[Evolution API Send]
-    K --> A
-```
 
 ## 🔧 Comandos Úteis Evolution API
 
@@ -283,3 +346,84 @@ Para dúvidas ou problemas:
 ---
 
 **🎉 Seu assistente financeiro está pronto para usar!**
+
+## 🔒 Verificação de Autorização de Usuários
+
+Para garantir a segurança e o controle de acesso ao Assistente Financeiro, foi implementado um sistema de verificação de usuários via Google Drive. Apenas números de telefone previamente cadastrados em uma planilha específica terão permissão para utilizar as funcionalidades do bot.
+
+### Como Funciona a Autorização
+
+1.  **Início do Fluxo:** Após o `WhatsApp Webhook` receber uma mensagem e o nó `Processar Dados` extrair as informações básicas do usuário (incluindo o número de telefone).
+2.  **Download da Planilha:** O nó `Download file` (Google Drive) é acionado para baixar uma planilha de autorização, convertendo-a para o formato CSV.
+3.  **Verificação de Acesso:** Um nó de código (`Autorização`) compara o número de telefone do usuário com a lista de números presentes na planilha. O código normaliza os números para garantir uma correspondência precisa.
+4.  **Roteamento do Fluxo:** Um nó `Switch Autorização` direciona o fluxo:
+    *   **Usuário Autorizado:** Se o número for encontrado na planilha, o fluxo prossegue para a `Classificação da Mensagem` e o processamento normal dos comandos.
+    *   **Usuário Não Autorizado:** Se o número não for encontrado, o fluxo é desviado para uma mensagem de "Acesso Negado", informando o usuário sobre a restrição e como solicitar acesso.
+
+### Configuração da Planilha de Autorização
+
+Crie uma planilha no Google Sheets com os números de telefone autorizados na **primeira coluna (Coluna A)**. Não é obrigatório ter um cabeçalho. Exemplo:
+
+| Coluna A |
+|----------|
+| 5521999998888 |
+| 11988887777 |
+| 5531977776666 |
+| ... |
+
+**Importante:** Certifique-se de que a planilha esteja compartilhada com a conta Google configurada nas credenciais do n8n, com permissão de leitura.
+
+### Diagrama do Fluxo n8n com Autorização
+
+O diagrama abaixo ilustra o fluxo completo do n8n, incluindo a etapa de verificação de autorização:
+
+![Fluxo n8n com Verificação de Autorização](https://private-us-east-1.manuscdn.com/sessionFile/LG8TOXnouA4FrIy7jGj9gb/sandbox/L9BJ20CjsxH0BaErHpUerv-images_1758299911437_na1fn_L2hvbWUvdWJ1bnR1L0Fzc2lzdGVudGUtRmluYW5jZWlyby9kb2NzL244bl9mbG93X2F1dGhvcml6YXRpb24.png?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvTEc4VE9Ybm91QTRGckl5N2pHajlnYi9zYW5kYm94L0w5QkoyMENqc3hIMEJhRXJIcFVlcnYtaW1hZ2VzXzE3NTgyOTk5MTE0MzdfbmExZm5fTDJodmJXVXZkV0oxYm5SMUwwRnpjMmx6ZEdWdWRHVXRSbWx1WVc1alpXbHlieTlrYjJOekwyNDRibDltYkc5M1gyRjFkR2h2Y21sNllYUnBiMjQucG5nIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=AQjjpPgg~vyzqhp0K1smYcDufFPI639lhtbIYBN9aKUtrFgo~SKUermOQyzw~-JWTuKMm49T6WiKkPf0qSHnvr5WSAm12syxEs~kwG4qpFBB7nY-0WiTu0z~-LSJ9DmHvZAjwJRx-LpOfWRUsE1ELxS2xZ~P8yptgJnfGuR-6iLbH1u0ddpPkJ95H1KSUQdm6ulknI6oOVs-ftew4BJxWTYtwpookvg~Dulot-uH9Q9RpJtSGJH8TbogDLmmHz9ilUlEtonQjXno-cl7oH84prtVJxS2~Ruvs6SERELPpeor7O3Gc9TBnxGjYUcCbJ0k6tf9hE0f3bX7BjU5n~KKCg__)
+
+### Código do Nó `Autorização`
+
+```javascript
+// =====================================================
+// VERIFICAÇÃO DE AUTORIZAÇÃO (FLUXO LINEAR)
+// =====================================================
+
+// Pega os dados do nó "Processar Dados" usando referência
+const processNodeItems = $items("🔧 Processar Dados");
+if (!processNodeItems.length) {
+    throw new Error("Erro: Não encontrei os dados do nó '🔧 Processar Dados'.");
+}
+const inputData = processNodeItems[0].json;
+
+// Pega os dados do nó anterior (que agora é o Download file)
+const driveData = $input.all()[0];
+
+// Se o download da planilha falhou
+if (!driveData.binary || !driveData.binary.data) {
+  return [{ json: { ...inputData, authorized: false, auth_error: 'Falha ao ler a planilha de autorização.' }}];
+}
+
+// Converte o arquivo CSV para texto
+const csvContent = Buffer.from(driveData.binary.data.data, 'base64').toString('utf8');
+const lines = csvContent.split('\n').map(line => line.trim()).filter(Boolean);
+const authorizedNumbers = new Set();
+
+// Lê cada linha da planilha
+lines.forEach((line) => {
+  const phoneFromSheet = line.split(',')[0].replace(/\D/g, '');
+  if (phoneFromSheet.length >= 10) {
+    let normalizedPhone = phoneFromSheet.startsWith('55') ? phoneFromSheet.substring(2) : phoneFromSheet;
+    authorizedNumbers.add(normalizedPhone);
+  }
+});
+
+// Verifica se o número do usuário está na lista
+const userPhone = inputData.phone_number;
+const isAuthorized = authorizedNumbers.has(userPhone);
+
+// Retorna o resultado
+return [{ json: {
+  ...inputData,
+  authorized: isAuthorized,
+  auth_error: isAuthorized ? null : 'Número não autorizado.'
+}}];
+```
+
